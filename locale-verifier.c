@@ -52,9 +52,9 @@ enum Language{
 	l_turkish = 2,
 };
 
-void write_to_file(char *str, char *file_name){
+void write_to_file(char *str, char *filename){
 	FILE *fp;
-	fp = fopen(file_name, "w");
+	fp = fopen(filename, "w");
 
 	if (fp != NULL){
 		fprintf(fp, "%s", str);
@@ -67,14 +67,27 @@ void write_to_file(char *str, char *file_name){
 	}
 }
 
-char* command_get_output(char *command){
+void change_locale(char* lang, char *filename){
+	if (!strcmp(lang, LANG_EN_US)){
+		write_to_file(LOCALE_ENGLISH, filename);
+	} else if (!strcmp(lang, LANG_TR_TR)){
+		write_to_file(LOCALE_TURKISH, filename);
+	} else {
+		printf("LANG not detected defaulted to English.\n");
+		//lang = LANG_EN_US;
+		write_to_file(LOCALE_ENGLISH, filename);
+	}
+}
+
+char* run_command(char *command){
 	FILE *fp;
 	char path[1035];
-	char *output = strcpy(output, "\0");
+	char *output = (char *)malloc(2048);
+	*output = '\0';
 
 	fp = popen(command, "r");
 	if (fp == NULL) {
-		printf("Failed to run command get packages.\n" );
+		printf("Failed to run command get packages.\n");
 		exit(1);
 	}
 
@@ -107,56 +120,63 @@ int main (){
 
 	    //Allocate
 	    char 	*value = (char *)malloc(BUFFER_SIZE),
-	    		*buffer = (char *)malloc(BUFFER_SIZE);
+	    		*buffer = (char *)malloc(BUFFER_SIZE),
+				*locale_content = (char *)malloc(BUFFER_SIZE);
 
    		//Extract Variables and Values
 	    char ch = '\0';
 	    int i = 0,
-	    	j = 0;
+	    	buffer_index = 0;
 
 	    for( i = 0; i <= fileSize; i++){
 	   		ch = content[i];
 
 	   		//Set the buffer as variable till '='
 	   		if(ch == '='){
-	   			j = 0; free(buffer); buffer = (char *)malloc(BUFFER_SIZE);
+	   			buffer_index = 0; free(buffer); buffer = (char *)malloc(BUFFER_SIZE);
 	   		}
 
 	   		//Set the buffer as value till '\n' or EOF
 	   		else if (ch == '\n' || i == fileSize){
 	   			strcpy(value, buffer);
-	   			j = 0; free(buffer); buffer = (char *)malloc(BUFFER_SIZE);
+	   			buffer_index = 0; free(buffer); buffer = (char *)malloc(BUFFER_SIZE);
 				break;
 	   		}
-	   		else if (j > BUFFER_SIZE) {
+	   		else if (buffer_index > BUFFER_SIZE) {
 	   			printf("Reached BUFFER_SIZE\n");
 	   			exit(0);
 	   		}
 			//Continue Cursor
-	   		else{buffer[j++] = ch;}
+	   		else{buffer[buffer_index++] = ch;}
 
 	    }//for
 
 	    fclose(current_locale_fp);
 
-	    int language = l_other; //for further use
-		if (!strcmp(value, LANG_EN_US)){
-			language = l_english;
-			write_to_file(LOCALE_ENGLISH, FILENAME);
-		} else if (!strcmp(value, LANG_TR_TR)){
-			language = l_turkish;
-			write_to_file(LOCALE_TURKISH, FILENAME);
-		} else {
-			printf("LANG not detected defaulted to English.\n");
-			language = l_english;
-			value = LANG_EN_US;
-			write_to_file(LOCALE_ENGLISH, FILENAME);
+		//$ locale -a | grep -i LANGUAGE
+		char *input_locale_installed = (char *)malloc(BUFFER_SIZE);
+		strcpy(input_locale_installed, "locale -a | grep -i ");
+			char *input_search_locale_installed = (char *)malloc(sizeof(char)*9);
+			strncpy(input_search_locale_installed, value, 9);
+			*(input_search_locale_installed+9) = '\0';
+			strcat(input_locale_installed, input_search_locale_installed);
+
+		char *locale_installed = run_command(input_locale_installed);
+
+		if (*locale_installed != '\0'){
+			//installed
+			change_locale(value, FILENAME);
+		}
+		else //not installed
+		{
+			// Check if it is added on locale.gen
+			// not needed -> $ cat /etc/locale.gen | grep -v "#" | if grep -sqi "LANG"; then echo "LANG" |  sudo tee -a /etc/locale.gen > /dev/null; fi
+			//$ variable=test | sed "s/# "$variable"/"$variable"/g" /etc/locale.gen | sudo tee /etc/locale.gen > /dev/null
+
+			char *locale_gen = run_command("");
 		}
 
-	    //printf("Contents Before:\n%s\n", content);
-	    char *locale_gen = command_get_output("/bin/cat /etc/locale.gen | /bin/grep -v \"#\" | /bin/grep \" \""),
-	    		*locale_installed = command_get_output((char *)sprintf("/bin/locale -a ; echo %s", value));
-	    free(content);
+	    free(content);//todo frees
 
 	}//fp if
 	else
@@ -165,9 +185,8 @@ int main (){
 		exit(0);
 	}
 	return 0;
-}//End of main
-
-/*
+}
+/*End of main
 
 /etc/default/locale
 
