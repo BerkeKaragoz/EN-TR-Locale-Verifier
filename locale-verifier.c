@@ -122,7 +122,7 @@ void reboot_ask(){
 	if (*prompt_input == 'y'){
 		free(prompt_input);
 		// Reboot
-		// echo "Close to cancel reboot.";for i in 1 2 3 4 5; do echo "$i"; sleep 1; done ; echo "Rebooting now..."; sleep 1; sudo reboot now
+		// echo "Close to cancel reboot.";for i in 1 2 3 4 5; do echo "$i"; sleep 1; done ; echo "Rebooting..."; sleep 1; sudo reboot now
 
 		printf("\nClose to cancel rebooting.\n");
 
@@ -132,7 +132,7 @@ void reboot_ask(){
 			sleep(1);
 		}
 
-		printf("\nRebooting now.\n");
+		printf("\nRebooting...\n");
 		run_command("sudo reboot now");
 	}
 	else
@@ -164,7 +164,7 @@ int main (){
 	    char 	*lang_value = (char *)malloc(BUFFER_SIZE),
 	    		*buffer = (char *)malloc(BUFFER_SIZE);
 
-   		//Extract Variables and Values
+   		//Extract LANG
 	    char ch = '\0';
 	    int i = 0,
 	    	buffer_index = 0;
@@ -196,10 +196,10 @@ int main (){
 		free(buffer);
 	    fclose(current_locale_fp);
 
-		//$ locale -a | grep -i LANGUAGE
-		// LANGUAGE codes first X chars to search
+		//$ locale -a 2> /dev/null | grep -i LANG
+		// Search LANG if installed
 		char *input_locale_installed = (char *)malloc(BUFFER_SIZE);
-		strcpy(input_locale_installed, "locale -a | grep -i ");
+		strcpy(input_locale_installed, "locale -a 2> /dev/null | grep -i ");
 			char *input_search_locale_installed = (char *)malloc(sizeof(char)*9);
 			strncpy(input_search_locale_installed, lang_value, 9);
 			*(input_search_locale_installed+9) = '\0';
@@ -211,7 +211,7 @@ int main (){
 
 		if (*locale_installed == '\0'){
 			//if not installed
-			
+			printf("Locale is not installed.\n");
 			// Check if it is added on locale.gen
 			//$ variable=LANG ; sed "s/# "$variable"/"$variable"/gi" /etc/locale.gen | sudo tee /etc/locale.gen > /dev/null
 			char *input_locale_gen = (char *)malloc(BUFFER_SIZE);
@@ -222,6 +222,7 @@ int main (){
 			free(input_locale_gen);
 			
 			//Generate Locales
+			printf("Getting locales...\n");
 			run_command("sudo locale-gen");
 		}
 		free(locale_installed);
@@ -263,6 +264,8 @@ LC_MEASUREMENT="en_US.UTF-8"
 LC_IDENTIFICATION="en_US.UTF-8"
 LC_ALL=
 
-
+Get locale
 $ cat /etc/locale.gen | grep -v "#" | if grep -sqi "LANG"; then echo "LANG" |  sudo tee -a /etc/locale.gen > /dev/null; fi
+Get all locale packs inside
+$ locale 2> /dev/null | cut -d '=' -f2 | sort | uniq | sed '1{^$/d}'
 */
