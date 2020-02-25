@@ -3,6 +3,7 @@
 #include <ctype.h>
 #include <string.h>
 #include <unistd.h>
+#include <assert.h>
 
 #define FILENAME "/etc/default/locale"
 
@@ -56,13 +57,60 @@ enum Language{
 	l_turkish = 2,
 };
 
+char** str_split(char* a_str, const char a_delim){
+    char** result    = 0;
+    size_t count     = 0;
+    char* tmp        = a_str;
+    char* last_comma = 0;
+    char delim[2];
+    delim[0] = a_delim;
+    delim[1] = 0;
+
+    /* Count how many elements will be extracted. */
+    while (*tmp)
+    {
+        if (a_delim == *tmp)
+        {
+            count++;
+            last_comma = tmp;
+        }
+        tmp++;
+    }
+
+    /* Add space for trailing token. */
+    count += last_comma < (a_str + strlen(a_str) - 1);
+
+    /* Add space for terminating null string so caller
+       knows where the list of returned strings ends. */
+    count++;
+
+    result = malloc(sizeof(char*) * count);
+
+    if (result)
+    {
+        size_t idx  = 0;
+        char* token = strtok(a_str, delim);
+
+        while (token)
+        {
+            assert(idx < count);
+            *(result + idx++) = strdup(token);
+            token = strtok(0, delim);
+        }
+        assert(idx == count - 1);
+        *(result + idx) = 0;
+    }
+
+    return result;
+}
+
 bool write_to_file(char *str, char *filename){
 	FILE *fp;
 	fp = fopen(filename, "w");
 
 	if (fp != NULL){
 		fprintf(fp, "%s", str);
-		printf("---Written---\n%s\n", str);
+		printf("| --- Written --- |\n%s\n", str);
 		fclose(fp);
 		return true;
 	} else {
@@ -71,21 +119,7 @@ bool write_to_file(char *str, char *filename){
 	}
 }
 
-bool change_locale(char* lang, char *filename){
-	bool is_success = false;
-	if (!strcmp(lang, LANG_EN_US)){
-		is_success = write_to_file(LOCALE_ENGLISH, filename);
-	} else if (!strcmp(lang, LANG_TR_TR)){
-		is_success = write_to_file(LOCALE_TURKISH, filename);
-	} else {
-		printf("LANG not detected defaulted to English.\n");
-		//lang = LANG_EN_US;
-		is_success = write_to_file(LOCALE_ENGLISH, filename);
-	}
-	return is_success;
-}
-
-char* run_command(char *command){
+char* run_command(char* command){
 	FILE *fp;
 	char path[1035];
 	char *output = (char *)malloc(2048);
@@ -104,6 +138,56 @@ char* run_command(char *command){
 	//printf("\nOUTPUT of %s:\n%s", command, output);
 	pclose(fp);
 	return output;
+}
+
+bool change_locale(char* lang, char *filename){
+	bool is_success = false;
+	if (!strcmp(lang, LANG_EN_US)){
+		is_success = write_to_file(LOCALE_ENGLISH, filename);
+	} else if (!strcmp(lang, LANG_TR_TR)){
+		is_success = write_to_file(LOCALE_TURKISH, filename);
+	} else {
+		printf("LANG not detected defaulted to English.\n");
+		is_success = write_to_file(LOCALE_ENGLISH, filename);
+	}
+	return is_success;
+}
+
+char* search_locale(char* to_search){
+	//$ locale -a 2> /dev/null | grep -i LANG
+	// Search LANG if installed
+	char *output = (char *)malloc(BUFFER_SIZE);
+	char *search_locale_input = (char *)malloc(sizeof(char)*9);
+
+	strcpy(output, "locale -a 2> /dev/null | grep -i ");
+		strncpy(search_locale_input, to_search, 9);
+		*(search_locale_input+9) = '\0';
+		strcat(output, search_locale_input);
+	free(search_locale_input);
+	return output;
+}
+
+char** extract_charmaps(char* str){
+	char* command = (char *)malloc(sizeof(char)*1024);//TODO correct malloc
+		strcpy(command, "printf \"");
+		strcat(command, str);
+		strcat(command, "\" 2> /dev/null | cut -d '=' -f2 | sort | uniq | sed '1{/^$/d}'");
+	
+	char* temp = run_command(command);
+		
+	free(command);
+	return str_split(temp, '\n');
+}
+
+void add_lang_to_localegen(char* lang_value){
+	// Check if it is added on locale.gen
+	//$ variable=LANG ; sed "s/# "$variable"/"$variable"/gi" /etc/locale.gen | sudo tee /etc/locale.gen > /dev/null
+	char *input_locale_gen = (char *)malloc(BUFFER_SIZE);
+		strcpy(input_locale_gen, "variable=");
+		strncat(input_locale_gen, lang_value, 9);
+		strcat(input_locale_gen, " ; sed \"s/# \"$variable\"/\"$variable\"/gi\" /etc/locale.gen | sudo tee /etc/locale.gen > /dev/null");
+	run_command(input_locale_gen);
+	free(input_locale_gen);
 }
 
 void reboot_ask(){
@@ -145,8 +229,7 @@ void reboot_ask(){
 int main (){
 	printf("\n");
 
-	FILE *current_locale_fp;
-	current_locale_fp = fopen(FILENAME, "r");
+	FILE *current_locale_fp = fopen(FILENAME, "r");
 
 	if (current_locale_fp != NULL)
 	{
@@ -156,19 +239,15 @@ int main (){
 		rewind(current_locale_fp);
 
 		//Read File
-		char *content = NULL;
-		content = (char *)malloc(file_size);
-	    fread (content, 1,file_size,current_locale_fp);
-
-	    //Allocate
-	    char 	*lang_value = (char *)malloc(BUFFER_SIZE),
-	    		*buffer = (char *)malloc(BUFFER_SIZE);
+		char *content = NULL; content = (char *)malloc(file_size);
+	    fread (content, 1, file_size, current_locale_fp);
 
    		//Extract LANG
 	    char ch = '\0';
+		char 	*lang_value = (char *)malloc(BUFFER_SIZE),
+				*buffer = (char *)malloc(BUFFER_SIZE);
 	    int i = 0,
 	    	buffer_index = 0;
-
 	    for( i = 0; i <= file_size; i++){
 	   		ch = content[i];
 
@@ -190,37 +269,28 @@ int main (){
 			//Continue Cursor
 	   		else{buffer[buffer_index++] = ch;}
 
-	    }//for
+	    }//for Extract LANG
 
 		free(content);
 		free(buffer);
 	    fclose(current_locale_fp);
-
 		//$ locale -a 2> /dev/null | grep -i LANG
-		// Search LANG if installed
-		char *input_locale_installed = (char *)malloc(BUFFER_SIZE);
-		strcpy(input_locale_installed, "locale -a 2> /dev/null | grep -i ");
-			char *input_search_locale_installed = (char *)malloc(sizeof(char)*9);
-			strncpy(input_search_locale_installed, lang_value, 9);
-			*(input_search_locale_installed+9) = '\0';
-			strcat(input_locale_installed, input_search_locale_installed);
-		free(input_search_locale_installed);
+		// Search LANGs if installed
+		char **locales_needed = !strcmp(lang_value, LANG_TR_TR) ? extract_charmaps(LOCALE_TURKISH) : extract_charmaps(LOCALE_ENGLISH);//MIGHT BE FAULTY
+		size_t ln_count = sizeof(locales_needed)/sizeof(char *); //MIGHT BE FAULTY
 
-		char *locale_installed = run_command(input_locale_installed);
-		free(input_locale_installed);
+		for(int ln_i = 0; i < ln_count; ln_i++){
+			printf("LN: %s\n", *(locales_needed+ln_i));//NOT PRINTING
+		} //todo extract and install each
+
+		char *locale_installed = run_command(search_locale(lang_value));
 
 		if (*locale_installed == '\0'){
 			//if not installed
 			printf("Locale is not installed.\n");
-			// Check if it is added on locale.gen
-			//$ variable=LANG ; sed "s/# "$variable"/"$variable"/gi" /etc/locale.gen | sudo tee /etc/locale.gen > /dev/null
-			char *input_locale_gen = (char *)malloc(BUFFER_SIZE);
-				strcpy(input_locale_gen, "variable=");
-				strncat(input_locale_gen, lang_value, 9);
-				strcat(input_locale_gen, " ; sed \"s/# \"$variable\"/\"$variable\"/gi\" /etc/locale.gen | sudo tee /etc/locale.gen > /dev/null");
-			run_command(input_locale_gen);
-			free(input_locale_gen);
-			
+
+			add_lang_to_localegen(lang_value);
+
 			//Generate Locales
 			printf("Getting locales...\n");
 			run_command("sudo locale-gen");
@@ -267,5 +337,5 @@ LC_ALL=
 Get locale
 $ cat /etc/locale.gen | grep -v "#" | if grep -sqi "LANG"; then echo "LANG" |  sudo tee -a /etc/locale.gen > /dev/null; fi
 Get all locale packs inside
-$ locale 2> /dev/null | cut -d '=' -f2 | sort | uniq | sed '1{^$/d}'
+$ locale 2> /dev/null | cut -d '=' -f2 | sort | uniq | sed '1{/^$/d}'
 */
