@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <ctype.h>
 #include <string.h>
 
 #define FILENAME "/etc/default/locale"
@@ -95,9 +96,34 @@ char* run_command(char *command){
 		strcat(output, path);
 	}
 
-	printf("\nOUTPUT of %s:\n%s", command, output);
+	//printf("\nOUTPUT of %s:\n%s", command, output);
 	pclose(fp);
 	return output;
+}
+
+void reboot_ask(){
+	printf("\nLocale is verified, do you want to reboot now? (y/n): ");
+	char *prompt_input = (char *)malloc(sizeof(char)*256);
+	scanf("%s", prompt_input);
+
+	*prompt_input = tolower(*prompt_input);
+	int i = 0;
+	while(*prompt_input != 'y' && *prompt_input != 'n' && i < 4){
+		printf("\nType 'y' or 'n': ");
+		scanf("%s", prompt_input);
+		i++;
+	}
+
+	if (*prompt_input == 'y'){
+		free(prompt_input);
+		// Reboot
+		run_command("echo \"Close to cancel reboot.\";for((i=5;i>=1;i-=1)); do echo \"$i\"; sleep 1; done ; echo \"Rebooting now...\"; sleep 1; sudo reboot now");
+	}
+	else
+	{
+		// Not reboot
+		free(prompt_input);
+	}
 }
 
 int main (){
@@ -110,25 +136,24 @@ int main (){
 	{
 		//Get Filesize
 		fseek(current_locale_fp, 0, SEEK_END);
-		unsigned int fileSize = ftell(current_locale_fp);
+		unsigned int file_size = ftell(current_locale_fp);
 		rewind(current_locale_fp);
 
 		//Read File
 		char *content = NULL;
-		content = (char *)malloc(fileSize);
-	    fread (content,1,fileSize,current_locale_fp);
+		content = (char *)malloc(file_size);
+	    fread (content, 1,file_size,current_locale_fp);
 
 	    //Allocate
-	    char 	*value = (char *)malloc(BUFFER_SIZE),
-	    		*buffer = (char *)malloc(BUFFER_SIZE),
-				*locale_content = (char *)malloc(BUFFER_SIZE);
+	    char 	*lang_value = (char *)malloc(BUFFER_SIZE),
+	    		*buffer = (char *)malloc(BUFFER_SIZE);
 
    		//Extract Variables and Values
 	    char ch = '\0';
 	    int i = 0,
 	    	buffer_index = 0;
 
-	    for( i = 0; i <= fileSize; i++){
+	    for( i = 0; i <= file_size; i++){
 	   		ch = content[i];
 
 	   		//Set the buffer as variable till '='
@@ -137,8 +162,8 @@ int main (){
 	   		}
 
 	   		//Set the buffer as value till '\n' or EOF
-	   		else if (ch == '\n' || i == fileSize){
-	   			strcpy(value, buffer);
+	   		else if (ch == '\n' || i == file_size){
+	   			strcpy(lang_value, buffer);
 	   			buffer_index = 0; free(buffer); buffer = (char *)malloc(BUFFER_SIZE);
 				break;
 	   		}
@@ -151,34 +176,46 @@ int main (){
 
 	    }//for
 
+		free(content);
+		free(buffer);
 	    fclose(current_locale_fp);
 
 		//$ locale -a | grep -i LANGUAGE
+		// LANGUAGE codes first X chars to search
 		char *input_locale_installed = (char *)malloc(BUFFER_SIZE);
 		strcpy(input_locale_installed, "locale -a | grep -i ");
 			char *input_search_locale_installed = (char *)malloc(sizeof(char)*9);
-			strncpy(input_search_locale_installed, value, 9);
+			strncpy(input_search_locale_installed, lang_value, 9);
 			*(input_search_locale_installed+9) = '\0';
 			strcat(input_locale_installed, input_search_locale_installed);
+		free(input_search_locale_installed);
 
 		char *locale_installed = run_command(input_locale_installed);
+		free(input_locale_installed);
 
-		if (*locale_installed != '\0'){
-			//installed
-			change_locale(value, FILENAME);
-		}
-		else //not installed
-		{
+		if (*locale_installed == '\0'){
+			//if not installed
+			
 			// Check if it is added on locale.gen
-			// not needed -> $ cat /etc/locale.gen | grep -v "#" | if grep -sqi "LANG"; then echo "LANG" |  sudo tee -a /etc/locale.gen > /dev/null; fi
-			//$ variable=test | sed "s/# "$variable"/"$variable"/g" /etc/locale.gen | sudo tee /etc/locale.gen > /dev/null
-
-			char *locale_gen = run_command("");
+			//$ variable=LANG ; sed "s/# "$variable"/"$variable"/gi" /etc/locale.gen | sudo tee /etc/locale.gen > /dev/null
+			char *input_locale_gen = (char *)malloc(BUFFER_SIZE);
+				strcpy(input_locale_gen, "variable=");
+				strncat(input_locale_gen, lang_value, 9);
+				strcat(input_locale_gen, " ; sed \"s/# \"$variable\"/\"$variable\"/gi\" /etc/locale.gen | sudo tee /etc/locale.gen > /dev/null");
+			run_command(input_locale_gen);
+			free(input_locale_gen);
+			
+			//Generate Locales
+			run_command("sudo locale-gen");
 		}
+		free(locale_installed);
 
-	    free(content);//todo frees
+		change_locale(lang_value, FILENAME);
+		free(lang_value);
 
-	}//fp if
+		reboot_ask();
+
+	}//if file pointer is null
 	else
 	{
 		printf("\nCannot open file!\n");
@@ -206,4 +243,6 @@ LC_MEASUREMENT="en_US.UTF-8"
 LC_IDENTIFICATION="en_US.UTF-8"
 LC_ALL=
 
+
+$ cat /etc/locale.gen | grep -v "#" | if grep -sqi "LANG"; then echo "LANG" |  sudo tee -a /etc/locale.gen > /dev/null; fi
 */
