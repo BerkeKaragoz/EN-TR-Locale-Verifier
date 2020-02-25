@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <ctype.h>
 #include <string.h>
+#include <unistd.h>
 
 #define FILENAME "/etc/default/locale"
 
@@ -47,37 +48,41 @@ LC_MEASUREMENT=\"en_US.UTF-8\"\n\
 LC_IDENTIFICATION=\"en_US.UTF-8\"\n\
 LC_ALL=\n"
 
+typedef enum {false, true} bool;
+
 enum Language{
 	l_other = 0,
 	l_english = 1,
 	l_turkish = 2,
 };
 
-void write_to_file(char *str, char *filename){
+bool write_to_file(char *str, char *filename){
 	FILE *fp;
 	fp = fopen(filename, "w");
 
 	if (fp != NULL){
 		fprintf(fp, "%s", str);
-		printf("WRITTEN:\n%s\n", str);
+		printf("---Written---\n%s\n", str);
 		fclose(fp);
-		return;
+		return true;
 	} else {
-		printf("Cannot Write File!\n");
-		return;
+		printf("Cannot write to the file, check permissions!\n");
+		return false;
 	}
 }
 
-void change_locale(char* lang, char *filename){
+bool change_locale(char* lang, char *filename){
+	bool is_success = false;
 	if (!strcmp(lang, LANG_EN_US)){
-		write_to_file(LOCALE_ENGLISH, filename);
+		is_success = write_to_file(LOCALE_ENGLISH, filename);
 	} else if (!strcmp(lang, LANG_TR_TR)){
-		write_to_file(LOCALE_TURKISH, filename);
+		is_success = write_to_file(LOCALE_TURKISH, filename);
 	} else {
 		printf("LANG not detected defaulted to English.\n");
 		//lang = LANG_EN_US;
-		write_to_file(LOCALE_ENGLISH, filename);
+		is_success = write_to_file(LOCALE_ENGLISH, filename);
 	}
+	return is_success;
 }
 
 char* run_command(char *command){
@@ -117,7 +122,18 @@ void reboot_ask(){
 	if (*prompt_input == 'y'){
 		free(prompt_input);
 		// Reboot
-		run_command("echo \"Close to cancel reboot.\";for((i=5;i>=1;i-=1)); do echo \"$i\"; sleep 1; done ; echo \"Rebooting now...\"; sleep 1; sudo reboot now");
+		// echo "Close to cancel reboot.";for i in 1 2 3 4 5; do echo "$i"; sleep 1; done ; echo "Rebooting now..."; sleep 1; sudo reboot now
+
+		printf("\nClose to cancel rebooting.\n");
+
+		int i = 5;
+		for (; i > 0; i--){
+			printf("%d\n", i);
+			sleep(1);
+		}
+
+		printf("\nRebooting now.\n");
+		run_command("sudo reboot now");
 	}
 	else
 	{
@@ -210,10 +226,14 @@ int main (){
 		}
 		free(locale_installed);
 
-		change_locale(lang_value, FILENAME);
+		if (change_locale(lang_value, FILENAME)){
+			reboot_ask();
+		}
+		else
+		{
+			printf("\nVerification failed.\n");
+		}
 		free(lang_value);
-
-		reboot_ask();
 
 	}//if file pointer is null
 	else
