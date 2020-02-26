@@ -52,12 +52,13 @@ LC_ALL="								"\n"
 
 typedef enum {false, true} bool;
 
-char** str_split(char* a_str, const char a_delim, size_t *count){
+// Splits STR by the DELIMITER to string array and returns it with element COUNT
+char** str_split(char* str, const char delimiter, size_t *count){
     char** result    = 0;
-    char* tmp        = a_str;
+    char* tmp        = str;
     char* last_comma = 0;
     char delim[2];
-    delim[0] = a_delim;
+    delim[0] = delimiter;
     delim[1] = 0;
 
 	*count = 0;
@@ -65,7 +66,7 @@ char** str_split(char* a_str, const char a_delim, size_t *count){
     // Count how many elements will be extracted.
     while (*tmp)
     {
-        if (a_delim == *tmp)
+        if (delimiter == *tmp)
         {
             (*count)++;
             last_comma = tmp;
@@ -74,7 +75,7 @@ char** str_split(char* a_str, const char a_delim, size_t *count){
     }
 
     // Add space for trailing token.
-    *count += last_comma < (a_str + strlen(a_str) - 1);
+    *count += last_comma < (str + strlen(str) - 1);
 
     // Add space for terminating null string so caller
     // knows where the list of returned strings ends.
@@ -85,7 +86,7 @@ char** str_split(char* a_str, const char a_delim, size_t *count){
     if (result)
     {
         size_t idx  = 0;
-        char* token = strtok(a_str, delim);
+        char* token = strtok(str, delim);
 
         while (token)
         {
@@ -100,6 +101,7 @@ char** str_split(char* a_str, const char a_delim, size_t *count){
     return result;
 }
 
+// Write STR to FILENAME
 bool write_to_file(char *str, char *filename){
 	FILE *fp;
 	fp = fopen(filename, "w");
@@ -115,6 +117,7 @@ bool write_to_file(char *str, char *filename){
 	}
 }
 
+// Executes sh COMMAND and returns the OUTPUT
 char* run_command(char* command){
 	FILE *fp;
 	char path[1035];
@@ -136,22 +139,25 @@ char* run_command(char* command){
 	return output;
 }
 
-bool change_locale(char* lang, char *filename){
+// Get LANG and write verified values to LOCALE_FILENAME
+// default: LOCALE_FILENAME = /etc/default/locale
+bool write_lang_to_locale(char* lang, char *locale_filename){
 	bool is_success = false;
 	if (!strcmp(lang, LANG_EN_US)){
-		is_success = write_to_file(LOCALE_ENGLISH, filename);
+		is_success = write_to_file(LOCALE_ENGLISH, locale_filename);
 	} else if (!strcmp(lang, LANG_TR_TR)){
-		is_success = write_to_file(LOCALE_TURKISH, filename);
+		is_success = write_to_file(LOCALE_TURKISH, locale_filename);
 	} else {
 		printf("LANG not detected defaulted to English.\n");
-		is_success = write_to_file(LOCALE_ENGLISH, filename);
+		is_success = write_to_file(LOCALE_ENGLISH, locale_filename);
 	}
 	return is_success;
 }
 
+// Search LANG if installed
+// Same as:
+// $ locale -a 2> /dev/null | grep -i LANG
 char* search_locale(char* to_search){
-	//$ locale -a 2> /dev/null | grep -i LANG
-	// Search LANG if installed
 	char *output = (char *)malloc(BUFFER_SIZE);
 	char *search_locale_input = (char *)malloc(sizeof(char)*9);
 
@@ -163,6 +169,8 @@ char* search_locale(char* to_search){
 	return output;
 }
 
+// Same as:
+// $ printf "THE_STRING" 2> /dev/null | cut -d '=' -f2 | sort | uniq | sed '1{/^$/d}'
 char** extract_charmaps(char* str, size_t *count){
 	char* command = (char *)malloc(sizeof(char)*1024);//TODO correct malloc
 		strcpy(command, "printf \"");
@@ -172,21 +180,24 @@ char** extract_charmaps(char* str, size_t *count){
 	char* temp = run_command(command);
 		
 	free(command);
+	// Return after splitting the results to string array
 	return str_split(temp, '\n', count);
 }
 
-void add_lang_to_localegen(char* lang_value){
-	// Check if it is added on locale.gen
-	//$ variable=LANG ; sed "s/# "$variable"/"$variable"/gi" /etc/locale.gen | sudo tee /etc/locale.gen > /dev/null
+// Add LANG to /etc/locale.gen to install later on
+// Same as:
+// $ variable=LANG ; sed "s/# "$variable"/"$variable"/gi" /etc/locale.gen | sudo tee /etc/locale.gen > /dev/null
+void add_lang_to_localegen(char* lang){
 	char *input_locale_gen = (char *)malloc(BUFFER_SIZE);
 		strcpy(input_locale_gen, "variable=");
-		strncat(input_locale_gen, lang_value, 9);
+		strncat(input_locale_gen, lang, 9);
 		strcat(input_locale_gen, " ; sed \"s/# \"$variable\"/\"$variable\"/gi\" /etc/locale.gen | sudo tee /etc/locale.gen > /dev/null");
 	run_command(input_locale_gen);
 	free(input_locale_gen);
 }
 
-void reboot_ask(){
+// Ask if the user want to reboot X seconds, and do it.
+void reboot_ask(int seconds_to_wait){
 	printf("\nLocale is verified, do you want to reboot to apply settings? (y/n): ");
 	char *prompt_input = (char *)malloc(sizeof(char)*256);
 	scanf("%s", prompt_input);
@@ -201,14 +212,13 @@ void reboot_ask(){
 
 	if (*prompt_input == 'y'){
 		free(prompt_input);
-		// Reboot
-		// echo "Close to cancel reboot.";for i in 1 2 3 4 5; do echo "$i"; sleep 1; done ; echo "Rebooting..."; sleep 1; sudo reboot now
-
+		// Reboot, same as:
+		// $ echo "Close to cancel reboot.";for i in 1 2 3 4 5; do echo "$i"; sleep 1; done ; echo "Rebooting..."; sleep 1; sudo reboot now
 		printf("\nClose to cancel rebooting.\n");
 
-		int i = 5;
-		for (; i > 0; i--){
-			printf("%d\n", i);
+		// Countdown
+		for (; seconds_to_wait > 0; seconds_to_wait--){
+			printf("%d\n", seconds_to_wait);
 			sleep(1);
 		}
 
@@ -237,7 +247,7 @@ int main (){
 		char *lang_value = run_command("cat /etc/default/locale 2> /dev/null | grep '^LANG=' | cut -d '=' -f2 | tr '\\n' '\\0'");
 		
 		// Extract the LANGs needed to be installed after verifying
-		size_t ln_count;
+		size_t ln_count; // ln == locales_needed
 		char **locales_needed = !strcmp(lang_value, LANG_TR_TR) ?
 			extract_charmaps(LOCALE_TURKISH, &ln_count) : extract_charmaps(LOCALE_ENGLISH, &ln_count);
 
@@ -246,7 +256,7 @@ int main (){
 		bool is_locale_gen_needed = false;
 		for(int ln_i = 0; ln_i < ln_count-1; ln_i++){//-1 for null
 
-			//$ locale -a 2> /dev/null | grep -i LANG
+			// $ locale -a 2> /dev/null | grep -i LANG
 			locale_installed = run_command(search_locale(*(locales_needed+ln_i)));
 
 			if (*locale_installed == '\0'){
@@ -258,15 +268,15 @@ int main (){
 
 		}
 
-		//Generate Locales if needed
+		// Generate Locales if needed
 		if (is_locale_gen_needed){
 			printf("Installing locales...\n");
 			run_command("sudo locale-gen");
 		}
 
-		//Write to verified locale to /etc/default/locale
-		if (change_locale(lang_value, LOCALE_FILENAME))
-			reboot_ask(); else printf("Verification failed.\n"); free(lang_value);
+		// Write to verified locale to /etc/default/locale
+		if (write_lang_to_locale(lang_value, LOCALE_FILENAME))
+			reboot_ask(5); else printf("Verification failed.\n"); free(lang_value);
 
 	}// if file pointer is null
 	else
