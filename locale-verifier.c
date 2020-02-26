@@ -277,7 +277,7 @@ int main (){
 	{
 		printf("\nCannot open required files, permissions are denied!\n");
 		fclose(current_locale_fp);
-		fclose(current_localegen_fp)
+		fclose(current_localegen_fp);
 		exit(1);
 	}
 	return 0;
