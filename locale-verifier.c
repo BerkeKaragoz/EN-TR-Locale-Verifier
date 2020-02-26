@@ -229,52 +229,15 @@ void reboot_ask(){
 
 int main (){
 	printf("\n");
-
 	FILE *current_locale_fp = fopen(FILENAME, "r");
+	FILE *current_localegen_fp = fopen("/etc/locale.gen", "w");
 
-	if (current_locale_fp != NULL)
+	// Check if has permissions
+	if (current_locale_fp != NULL && current_localegen_fp != NULL)
 	{
-		//Get Filesize
-		fseek(current_locale_fp, 0, SEEK_END);
-		unsigned int file_size = ftell(current_locale_fp);
-		rewind(current_locale_fp);
-
-		//Read File
-		char *content = NULL; content = (char *)malloc(file_size);
-	    fread (content, 1, file_size, current_locale_fp);
-	    fclose(current_locale_fp);
-		
-   		//Extract LANG
-	    char ch = '\0';
-		char 	*lang_value = (char *)malloc(BUFFER_SIZE),
-				*buffer = (char *)malloc(BUFFER_SIZE);
-	    int i = 0,
-	    	buffer_index = 0;
-	    for( i = 0; i <= file_size; i++){
-	   		ch = content[i];
-
-	   		//Set the buffer as variable till '='
-	   		if(ch == '='){
-	   			buffer_index = 0; free(buffer); buffer = (char *)malloc(BUFFER_SIZE);
-	   		}
-
-	   		//Set the buffer as value till '\n' or EOF
-	   		else if (ch == '\n' || i == file_size){
-	   			strcpy(lang_value, buffer);
-	   			buffer_index = 0; free(buffer); buffer = (char *)malloc(BUFFER_SIZE);
-				break;
-	   		}
-	   		else if (buffer_index > BUFFER_SIZE) {
-	   			printf("Reached BUFFER_SIZE\n");
-	   			exit(0);
-	   		}
-			//Continue Cursor
-	   		else{buffer[buffer_index++] = ch;}
-
-	    }//for Extract LANG
-
-		free(content);
-		free(buffer);
+		fclose(current_locale_fp);
+		fclose(current_localegen_fp);
+		char *lang_value = run_command("cat /etc/default/locale 2> /dev/null | grep '^LANG=' | cut -d '=' -f2");
 
 		size_t ln_count;
 		// Search LANGs if installed
@@ -312,33 +275,10 @@ int main (){
 	}//if file pointer is null
 	else
 	{
-		printf("\nCannot open file!\n");
-		exit(0);
+		printf("\nCannot open required files, permissions are denied!\n");
+		fclose(current_locale_fp);
+		fclose(current_localegen_fp)
+		exit(1);
 	}
 	return 0;
 }
-/*End of main
-
-/etc/default/locale
-
-LANG=tr_TR.UTF-8
-LANGUAGE=
-LC_CTYPE="en_US.UTF-8"
-LC_NUMERIC="tr_TR.UTF-8"
-LC_TIME="tr_TR.UTF-8"
-LC_COLLATE="tr_TR.UTF-8"
-LC_MONETARY="en_US.UTF-8"
-LC_MESSAGES="tr_TR.UTF-8"
-LC_PAPER="en_US.UTF-8"
-LC_NAME="tr_TR.UTF-8"
-LC_ADDRESS="tr_TR.UTF-8"
-LC_TELEPHONE="en_US.UTF-8"
-LC_MEASUREMENT="en_US.UTF-8"
-LC_IDENTIFICATION="en_US.UTF-8"
-LC_ALL=
-
-Get locale
-$ cat /etc/locale.gen | grep -v "#" | if grep -sqi "LANG"; then echo "LANG" |  sudo tee -a /etc/locale.gen > /dev/null; fi
-Get all locale packs inside
-$ locale 2> /dev/null | cut -d '=' -f2 | sort | uniq | sed '1{/^$/d}'
-*/
