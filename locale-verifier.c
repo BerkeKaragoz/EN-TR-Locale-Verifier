@@ -264,16 +264,14 @@ int main (){
 		}
 		else
 		{
-			printf("\nVerification failed.\n");
+			printf("Verification failed.\n");
 		}
 		free(lang_value);
 
 	}// if file pointer is null
 	else
 	{
-		printf("\nCannot open required files, permissions are denied!\n");
-		fclose(current_locale_fp);
-		fclose(current_localegen_fp);
+		printf("Cannot open required files, permissions are denied!\n");
 		exit(1);
 	}
 	return 0;
