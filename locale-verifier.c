@@ -52,6 +52,15 @@ LC_ALL="								"\n"
 
 typedef enum {false, true} bool;
 
+// Returns STR's size 
+size_t strptrlen(char *str){
+	// Count STR's lenght
+	char *tmp = str;
+	unsigned int str_lenght = 0;
+	while(*tmp++) str_lenght++;
+	return (size_t) str_lenght * sizeof(char);
+}
+
 // Splits STR by the DELIMITER to string array and returns it with element COUNT
 char** str_split(char* str, const char delimiter, size_t *count){
     char** result    = 0;
@@ -120,8 +129,9 @@ bool write_to_file(char *str, char *filename){
 // Executes sh COMMAND and returns the OUTPUT
 char* run_command(char* command){
 	FILE *fp;
+	size_t output_size = sizeof(char);
 	char path[1035];
-	char *output = (char *)malloc(2048);
+	char *output = (char *)malloc(output_size);
 	*output = '\0';
 
 	fp = popen(command, "r");
@@ -131,6 +141,8 @@ char* run_command(char* command){
 	}
 
 	while (fgets(path, sizeof(path), fp) != NULL) {
+		output_size += sizeof(path);
+		output = realloc(output, output_size);
 		strcat(output, path);
 	}
 
@@ -143,14 +155,21 @@ char* run_command(char* command){
 // default: LOCALE_FILENAME = /etc/default/locale
 bool write_lang_to_locale(char* lang, char *locale_filename){
 	bool is_success = false;
-	if (!strcmp(lang, LANG_EN_US)){
+
+	if (!strcmp(lang, LANG_EN_US))
+	{
 		is_success = write_to_file(LOCALE_ENGLISH, locale_filename);
-	} else if (!strcmp(lang, LANG_TR_TR)){
+	}
+	else if (!strcmp(lang, LANG_TR_TR))
+	{
 		is_success = write_to_file(LOCALE_TURKISH, locale_filename);
-	} else {
+	}
+	else 
+	{
 		printf("LANG not detected defaulted to English.\n");
 		is_success = write_to_file(LOCALE_ENGLISH, locale_filename);
 	}
+
 	return is_success;
 }
 
@@ -158,21 +177,28 @@ bool write_lang_to_locale(char* lang, char *locale_filename){
 // Same as:
 // $ locale -a 2> /dev/null | grep -i LANG
 char* search_locale(char* to_search){
-	char *output = (char *)malloc(BUFFER_SIZE);
-	char *search_locale_input = (char *)malloc(sizeof(char)*9);
+	char *search_locale_input = (char *)malloc(0); // first 9 letters are needed, ex: en_US (5) .UTF (4)
+	char *output = (char *)malloc(
+		sizeof("locale -a 2> /dev/null | grep -i ") + sizeof(char)*9
+	);
 
 	strcpy(output, "locale -a 2> /dev/null | grep -i ");
 		strncpy(search_locale_input, to_search, 9);
-		*(search_locale_input+9) = '\0';
+		*(search_locale_input + 9) = '\0';
 		strcat(output, search_locale_input);
 	free(search_locale_input);
-	return output;
+	
+	return run_command(output);
 }
 
 // Same as:
 // $ printf "THE_STRING" 2> /dev/null | cut -d '=' -f2 | sort | uniq | sed '1{/^$/d}'
 char** extract_charmaps(char* str, size_t *count){
-	char* command = (char *)malloc(sizeof(char)*1024);//TODO correct malloc
+
+	char* command = (char *)malloc(
+			strptrlen(str) + sizeof("printf \"\" 2> /dev/null | cut -d '=' -f2 | sort | uniq | sed '1{/^$/d}")
+		);
+
 		strcpy(command, "printf \"");
 		strcat(command, str);
 		strcat(command, "\" 2> /dev/null | cut -d '=' -f2 | sort | uniq | sed '1{/^$/d}'");
@@ -188,7 +214,9 @@ char** extract_charmaps(char* str, size_t *count){
 // Same as:
 // $ variable=LANG ; sed "s/# "$variable"/"$variable"/gi" /etc/locale.gen | sudo tee /etc/locale.gen > /dev/null
 void add_lang_to_localegen(char* lang){
-	char *input_locale_gen = (char *)malloc(BUFFER_SIZE);
+	char *input_locale_gen = (char *)malloc(
+		strptrlen(lang) + sizeof("variable= ; sed \"s/# \"$variable\"/\"$variable\"/gi\" /etc/locale.gen | sudo tee /etc/locale.gen > /dev/null")
+	);
 		strcpy(input_locale_gen, "variable=");
 		strncat(input_locale_gen, lang, 9);
 		strcat(input_locale_gen, " ; sed \"s/# \"$variable\"/\"$variable\"/gi\" /etc/locale.gen | sudo tee /etc/locale.gen > /dev/null");
@@ -199,7 +227,7 @@ void add_lang_to_localegen(char* lang){
 // Ask if the user want to reboot X seconds, and do it.
 void reboot_ask(int seconds_to_wait){
 	printf("\nLocale is verified, do you want to reboot to apply settings? (y/n): ");
-	char *prompt_input = (char *)malloc(sizeof(char)*256);
+	char *prompt_input = (char *)malloc(0);
 	scanf("%s", prompt_input);
 
 	*prompt_input = tolower(*prompt_input);
@@ -233,7 +261,6 @@ void reboot_ask(int seconds_to_wait){
 }
 
 int main (){
-	printf("\n");
 	FILE *current_locale_fp = fopen(LOCALE_FILENAME, "r");
 	FILE *current_localegen_fp = fopen(LOCALEGEN_FILENAME, "a");
 
@@ -257,7 +284,7 @@ int main (){
 		for(int ln_i = 0; ln_i < ln_count-1; ln_i++){//-1 for null
 
 			// $ locale -a 2> /dev/null | grep -i LANG
-			locale_installed = run_command(search_locale(*(locales_needed+ln_i)));
+			locale_installed = search_locale(*(locales_needed+ln_i));
 
 			if (*locale_installed == '\0'){
 				printf("Locale '%s' is not installed.\n", *(locales_needed+ln_i));
