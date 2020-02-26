@@ -5,7 +5,8 @@
 #include <unistd.h>
 #include <assert.h>
 
-#define FILENAME "/etc/default/locale"
+#define LOCALE_FILENAME "/etc/default/locale"
+#define LOCALEGEN_FILENAME "/etc/locale.gen"
 
 #define LANG_TR_TR "tr_TR.UTF-8"
 #define LANG_EN_US "en_US.UTF-8"
@@ -50,12 +51,6 @@ LC_IDENTIFICATION=\"en_US.UTF-8\"\n\
 LC_ALL=\n"
 
 typedef enum {false, true} bool;
-
-enum Language{
-	l_other = 0,
-	l_english = 1,
-	l_turkish = 2,
-};
 
 char** str_split(char* a_str, const char a_delim, size_t *count){
     char** result    = 0;
@@ -229,18 +224,17 @@ void reboot_ask(){
 
 int main (){
 	printf("\n");
-	FILE *current_locale_fp = fopen(FILENAME, "r");
-	FILE *current_localegen_fp = fopen("/etc/locale.gen", "w");
+	FILE *current_locale_fp = fopen(LOCALE_FILENAME, "r");
+	FILE *current_localegen_fp = fopen(LOCALEGEN_FILENAME, "w");
 
 	// Check if has permissions
 	if (current_locale_fp != NULL && current_localegen_fp != NULL)
 	{
 		fclose(current_locale_fp);
 		fclose(current_localegen_fp);
-		char *lang_value = run_command("cat /etc/default/locale 2> /dev/null | grep '^LANG=' | cut -d '=' -f2");
-
-		size_t ln_count;
+		char *lang_value = run_command("cat /etc/default/locale 2> /dev/null | grep '^LANG=' | cut -d '=' -f2 | tr '\\n' '\\0'");
 		// Search LANGs if installed
+		size_t ln_count;
 		char **locales_needed = !strcmp(lang_value, LANG_TR_TR) ? extract_charmaps(LOCALE_TURKISH, &ln_count) : extract_charmaps(LOCALE_ENGLISH, &ln_count);
 
 		char *locale_installed;
@@ -249,11 +243,13 @@ int main (){
 
 			//$ locale -a 2> /dev/null | grep -i LANG
 			locale_installed = run_command(search_locale(*(locales_needed+ln_i)));
+
 			if (*locale_installed == '\0'){
 				printf("Locale '%s' is not installed.\n", *(locales_needed+ln_i));
 				is_locale_gen_needed = true;
 				add_lang_to_localegen(*(locales_needed+ln_i));
 			}
+
 		free(locale_installed);
 		}
 
@@ -263,7 +259,7 @@ int main (){
 			run_command("sudo locale-gen");
 		}
 
-		if (change_locale(lang_value, FILENAME)){
+		if (change_locale(lang_value, LOCALE_FILENAME)){
 			reboot_ask();
 		}
 		else
@@ -272,7 +268,7 @@ int main (){
 		}
 		free(lang_value);
 
-	}//if file pointer is null
+	}// if file pointer is null
 	else
 	{
 		printf("\nCannot open required files, permissions are denied!\n");
