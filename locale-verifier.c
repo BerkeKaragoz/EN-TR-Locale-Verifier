@@ -17,38 +17,38 @@
 #define ADD_QUOTES(X) "\""X"\""
 
 #define LOCALE_TURKISH "\
-LANG=tr_TR.UTF-8\n\
-LANGUAGE=\n\
-LC_CTYPE=\"en_US.UTF-8\"\n\
-LC_NUMERIC=\"tr_TR.UTF-8\"\n\
-LC_TIME=\"tr_TR.UTF-8\"\n\
-LC_COLLATE=\"tr_TR.UTF-8\"\n\
-LC_MONETARY=\"en_US.UTF-8\"\n\
-LC_MESSAGES=\"tr_TR.UTF-8\"\n\
-LC_PAPER=\"en_US.UTF-8\"\n\
-LC_NAME=\"tr_TR.UTF-8\"\n\
-LC_ADDRESS=\"tr_TR.UTF-8\"\n\
-LC_TELEPHONE=\"en_US.UTF-8\"\n\
-LC_MEASUREMENT=\"en_US.UTF-8\"\n\
-LC_IDENTIFICATION=\"en_US.UTF-8\"\n\
-LC_ALL=\n"
+LANG="				""		LANG_TR_TR	"\n\
+LANGUAGE="								"\n\
+LC_CTYPE="			"\""	LANG_EN_US	"\"\n\
+LC_NUMERIC="		"\""	LANG_TR_TR	"\"\n\
+LC_TIME="			"\""	LANG_TR_TR	"\"\n\
+LC_COLLATE="		"\""	LANG_TR_TR	"\"\n\
+LC_MONETARY="		"\""	LANG_EN_US	"\"\n\
+LC_MESSAGES="		"\""	LANG_TR_TR	"\"\n\
+LC_PAPER="			"\""	LANG_EN_US	"\"\n\
+LC_NAME="			"\""	LANG_TR_TR	"\"\n\
+LC_ADDRESS="		"\""	LANG_TR_TR	"\"\n\
+LC_TELEPHONE="		"\""	LANG_EN_US	"\"\n\
+LC_MEASUREMENT="	"\""	LANG_EN_US	"\"\n\
+LC_IDENTIFICATION="	"\""	LANG_EN_US	"\"\n\
+LC_ALL="								"\n"
 
 #define LOCALE_ENGLISH "\
-LANG=en_US.UTF-8\n\
-LANGUAGE=\n\
-LC_CTYPE=\"en_US.UTF-8\"\n\
-LC_NUMERIC=\"en_US.UTF-8\"\n\
-LC_TIME=\"en_US.UTF-8\"\n\
-LC_COLLATE=\"en_US.UTF-8\"\n\
-LC_MONETARY=\"en_US.UTF-8\"\n\
-LC_MESSAGES=\"en_US.UTF-8\"\n\
-LC_PAPER=\"en_US.UTF-8\"\n\
-LC_NAME=\"en_US.UTF-8\"\n\
-LC_ADDRESS=\"en_US.UTF-8\"\n\
-LC_TELEPHONE=\"en_US.UTF-8\"\n\
-LC_MEASUREMENT=\"en_US.UTF-8\"\n\
-LC_IDENTIFICATION=\"en_US.UTF-8\"\n\
-LC_ALL=\n"
+LANG="				""		LANG_EN_US	"\n\
+LANGUAGE="								"\n\
+LC_CTYPE="			"\""	LANG_EN_US	"\"\n\
+LC_NUMERIC="		"\""	LANG_EN_US	"\"\n\
+LC_TIME="			"\""	LANG_EN_US	"\"\n\
+LC_COLLATE="		"\""	LANG_EN_US	"\"\n\
+LC_MONETARY="		"\""	LANG_EN_US	"\"\n\
+LC_MESSAGES="		"\""	LANG_EN_US	"\"\n\
+LC_PAPER="			"\""	LANG_EN_US	"\"\n\
+LC_NAME="			"\""	LANG_EN_US	"\"\n\
+LC_ADDRESS="		"\""	LANG_EN_US	"\"\n\
+LC_TELEPHONE="		"\""	LANG_EN_US	"\"\n\
+LC_MEASUREMENT="	"\""	LANG_EN_US	"\"\n\
+LC_IDENTIFICATION="	"\""	LANG_EN_US	"\"\n\
+LC_ALL="								"\n"
 
 typedef enum {false, true} bool;
 
@@ -225,18 +225,23 @@ void reboot_ask(){
 int main (){
 	printf("\n");
 	FILE *current_locale_fp = fopen(LOCALE_FILENAME, "r");
-	FILE *current_localegen_fp = fopen(LOCALEGEN_FILENAME, "w");
+	FILE *current_localegen_fp = fopen(LOCALEGEN_FILENAME, "a");
 
-	// Check if has permissions
+	// Check if script has permissions
 	if (current_locale_fp != NULL && current_localegen_fp != NULL)
 	{
 		fclose(current_locale_fp);
 		fclose(current_localegen_fp);
+		
+		// Get the systems locale LANG
 		char *lang_value = run_command("cat /etc/default/locale 2> /dev/null | grep '^LANG=' | cut -d '=' -f2 | tr '\\n' '\\0'");
-		// Search LANGs if installed
+		
+		// Extract the LANGs needed to be installed after verifying
 		size_t ln_count;
-		char **locales_needed = !strcmp(lang_value, LANG_TR_TR) ? extract_charmaps(LOCALE_TURKISH, &ln_count) : extract_charmaps(LOCALE_ENGLISH, &ln_count);
+		char **locales_needed = !strcmp(lang_value, LANG_TR_TR) ?
+			extract_charmaps(LOCALE_TURKISH, &ln_count) : extract_charmaps(LOCALE_ENGLISH, &ln_count);
 
+		// Check if the LANG is installed -> locale -a
 		char *locale_installed;
 		bool is_locale_gen_needed = false;
 		for(int ln_i = 0; ln_i < ln_count-1; ln_i++){//-1 for null
@@ -249,24 +254,19 @@ int main (){
 				is_locale_gen_needed = true;
 				add_lang_to_localegen(*(locales_needed+ln_i));
 			}
+			free(locale_installed);
 
-		free(locale_installed);
 		}
 
+		//Generate Locales if needed
 		if (is_locale_gen_needed){
-			//Generate Locales
 			printf("Installing locales...\n");
 			run_command("sudo locale-gen");
 		}
 
-		if (change_locale(lang_value, LOCALE_FILENAME)){
-			reboot_ask();
-		}
-		else
-		{
-			printf("Verification failed.\n");
-		}
-		free(lang_value);
+		//Write to verified locale to /etc/default/locale
+		if (change_locale(lang_value, LOCALE_FILENAME))
+			reboot_ask(); else printf("Verification failed.\n"); free(lang_value);
 
 	}// if file pointer is null
 	else
@@ -274,5 +274,6 @@ int main (){
 		printf("Cannot open required files, permissions are denied!\n");
 		exit(1);
 	}
+
 	return 0;
-}
+}// main
