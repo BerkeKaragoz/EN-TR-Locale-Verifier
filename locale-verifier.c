@@ -57,34 +57,35 @@ enum Language{
 	l_turkish = 2,
 };
 
-char** str_split(char* a_str, const char a_delim){
+char** str_split(char* a_str, const char a_delim, size_t *count){
     char** result    = 0;
-    size_t count     = 0;
     char* tmp        = a_str;
     char* last_comma = 0;
     char delim[2];
     delim[0] = a_delim;
     delim[1] = 0;
 
-    /* Count how many elements will be extracted. */
+	*count = 0;
+
+    // Count how many elements will be extracted.
     while (*tmp)
     {
         if (a_delim == *tmp)
         {
-            count++;
+            (*count)++;
             last_comma = tmp;
         }
         tmp++;
     }
 
-    /* Add space for trailing token. */
-    count += last_comma < (a_str + strlen(a_str) - 1);
+    // Add space for trailing token.
+    *count += last_comma < (a_str + strlen(a_str) - 1);
 
-    /* Add space for terminating null string so caller
-       knows where the list of returned strings ends. */
-    count++;
+    // Add space for terminating null string so caller
+    // knows where the list of returned strings ends.
+    (*count)++;
 
-    result = malloc(sizeof(char*) * count);
+    result = malloc(sizeof(char*) * (*count));
 
     if (result)
     {
@@ -93,11 +94,11 @@ char** str_split(char* a_str, const char a_delim){
 
         while (token)
         {
-            assert(idx < count);
+            assert(idx < *count);
             *(result + idx++) = strdup(token);
             token = strtok(0, delim);
         }
-        assert(idx == count - 1);
+        assert(idx == *count - 1);
         *(result + idx) = 0;
     }
 
@@ -110,7 +111,7 @@ bool write_to_file(char *str, char *filename){
 
 	if (fp != NULL){
 		fprintf(fp, "%s", str);
-		printf("| --- Written --- |\n%s\n", str);
+		printf("\n| --- Written --- |\n%s\n", str);
 		fclose(fp);
 		return true;
 	} else {
@@ -167,7 +168,7 @@ char* search_locale(char* to_search){
 	return output;
 }
 
-char** extract_charmaps(char* str){
+char** extract_charmaps(char* str, size_t *count){
 	char* command = (char *)malloc(sizeof(char)*1024);//TODO correct malloc
 		strcpy(command, "printf \"");
 		strcat(command, str);
@@ -176,7 +177,7 @@ char** extract_charmaps(char* str){
 	char* temp = run_command(command);
 		
 	free(command);
-	return str_split(temp, '\n');
+	return str_split(temp, '\n', count);
 }
 
 void add_lang_to_localegen(char* lang_value){
@@ -191,7 +192,7 @@ void add_lang_to_localegen(char* lang_value){
 }
 
 void reboot_ask(){
-	printf("\nLocale is verified, do you want to reboot now? (y/n): ");
+	printf("\nLocale is verified, do you want to reboot to apply settings? (y/n): ");
 	char *prompt_input = (char *)malloc(sizeof(char)*256);
 	scanf("%s", prompt_input);
 
@@ -241,7 +242,8 @@ int main (){
 		//Read File
 		char *content = NULL; content = (char *)malloc(file_size);
 	    fread (content, 1, file_size, current_locale_fp);
-
+	    fclose(current_locale_fp);
+		
    		//Extract LANG
 	    char ch = '\0';
 		char 	*lang_value = (char *)malloc(BUFFER_SIZE),
@@ -273,29 +275,30 @@ int main (){
 
 		free(content);
 		free(buffer);
-	    fclose(current_locale_fp);
-		//$ locale -a 2> /dev/null | grep -i LANG
+
+		size_t ln_count;
 		// Search LANGs if installed
-		char **locales_needed = !strcmp(lang_value, LANG_TR_TR) ? extract_charmaps(LOCALE_TURKISH) : extract_charmaps(LOCALE_ENGLISH);//MIGHT BE FAULTY
-		size_t ln_count = sizeof(locales_needed)/sizeof(char *); //MIGHT BE FAULTY
+		char **locales_needed = !strcmp(lang_value, LANG_TR_TR) ? extract_charmaps(LOCALE_TURKISH, &ln_count) : extract_charmaps(LOCALE_ENGLISH, &ln_count);
 
-		for(int ln_i = 0; i < ln_count; ln_i++){
-			printf("LN: %s\n", *(locales_needed+ln_i));//NOT PRINTING
-		} //todo extract and install each
+		char *locale_installed;
+		bool is_locale_gen_needed = false;
+		for(int ln_i = 0; ln_i < ln_count-1; ln_i++){//-1 for null
 
-		char *locale_installed = run_command(search_locale(lang_value));
+			//$ locale -a 2> /dev/null | grep -i LANG
+			locale_installed = run_command(search_locale(*(locales_needed+ln_i)));
+			if (*locale_installed == '\0'){
+				printf("Locale '%s' is not installed.\n", *(locales_needed+ln_i));
+				is_locale_gen_needed = true;
+				add_lang_to_localegen(*(locales_needed+ln_i));
+			}
+		free(locale_installed);
+		}
 
-		if (*locale_installed == '\0'){
-			//if not installed
-			printf("Locale is not installed.\n");
-
-			add_lang_to_localegen(lang_value);
-
+		if (is_locale_gen_needed){
 			//Generate Locales
-			printf("Getting locales...\n");
+			printf("Installing locales...\n");
 			run_command("sudo locale-gen");
 		}
-		free(locale_installed);
 
 		if (change_locale(lang_value, FILENAME)){
 			reboot_ask();
