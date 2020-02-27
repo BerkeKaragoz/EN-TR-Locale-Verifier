@@ -11,8 +11,6 @@
 #define LANG_TR_TR "tr_TR.UTF-8"
 #define LANG_EN_US "en_US.UTF-8"
 
-#define BUFFER_SIZE 256
-
 #define STR(X) #X
 #define ADD_QUOTES(X) "\""X"\""
 
@@ -54,15 +52,15 @@ typedef enum {false, true} bool;
 
 // Returns STR's size 
 size_t strptrlen(char *str){
-	// Count STR's lenght
 	char *tmp = str;
 	unsigned int str_lenght = 0;
+	// Count STR's lenght
 	while(*tmp++) str_lenght++;
 	return (size_t) str_lenght * sizeof(char);
 }
 
 // Splits STR by the DELIMITER to string array and returns it with element COUNT
-char** str_split(char* str, const char delimiter, size_t *count){
+char** str_split(char* str, const char delimiter, size_t *count_ptr){
     char** result    = 0;
     char* tmp        = str;
     char* last_comma = 0;
@@ -70,27 +68,27 @@ char** str_split(char* str, const char delimiter, size_t *count){
     delim[0] = delimiter;
     delim[1] = 0;
 
-	*count = 0;
+	*count_ptr = 0;
 
     // Count how many elements will be extracted.
     while (*tmp)
     {
         if (delimiter == *tmp)
         {
-            (*count)++;
+            (*count_ptr)++;
             last_comma = tmp;
         }
         tmp++;
     }
 
     // Add space for trailing token.
-    *count += last_comma < (str + strlen(str) - 1);
+    *count_ptr += last_comma < (str + strlen(str) - 1);
 
     // Add space for terminating null string so caller
     // knows where the list of returned strings ends.
-    (*count)++;
+    (*count_ptr)++;
 
-    result = malloc(sizeof(char*) * (*count));
+    result = malloc(sizeof(char*) * (*count_ptr));
 
     if (result)
     {
@@ -99,11 +97,11 @@ char** str_split(char* str, const char delimiter, size_t *count){
 
         while (token)
         {
-            assert(idx < *count);
+            assert(idx < *count_ptr);
             *(result + idx++) = strdup(token);
             token = strtok(0, delim);
         }
-        assert(idx == *count - 1);
+        assert(idx == *count_ptr - 1);
         *(result + idx) = 0;
     }
 
@@ -146,7 +144,6 @@ char* run_command(char* command){
 		strcat(output, path);
 	}
 
-	//printf("\nOUTPUT of %s:\n%s", command, output);
 	pclose(fp);
 	return output;
 }
@@ -176,7 +173,7 @@ bool write_lang_to_locale(char* lang, char *locale_filename){
 // Search LANG if installed
 // Same as:
 // $ locale -a 2> /dev/null | grep -i LANG
-char* search_locale(char* to_search){
+char* search_locale_installed(char* to_search){
 	char *search_locale_input = (char *)malloc(0); // first 9 letters are needed, ex: en_US (5) .UTF (4)
 	char *output = (char *)malloc(
 		sizeof("locale -a 2> /dev/null | grep -i ") + sizeof(char)*9
@@ -212,14 +209,14 @@ char** extract_charmaps(char* str, size_t *count){
 
 // Add LANG to /etc/locale.gen to install later on
 // Same as:
-// $ variable=LANG ; sed "s/# "$variable"/"$variable"/gi" /etc/locale.gen | sudo tee /etc/locale.gen > /dev/null
+// $ search="^LANG\." ; result=$(grep $search /usr/share/i18n/SUPPORTED) ; grep -v "$result" /etc/locale.gen | sudo tee /etc/locale.gen > /dev/null ; echo $result | sudo tee -a /etc/locale.gen > /dev/null
 void add_lang_to_localegen(char* lang){
 	char *input_locale_gen = (char *)malloc(
-		strptrlen(lang) + sizeof("variable= ; sed \"s/# \"$variable\"/\"$variable\"/gi\" /etc/locale.gen | sudo tee /etc/locale.gen > /dev/null")
+		strptrlen(lang) + sizeof("search=\"^\" ; result=$(grep $search /usr/share/i18n/SUPPORTED) ; grep -v \"$result\" /etc/locale.gen | sudo tee /etc/locale.gen > /dev/null ; echo $result | sudo tee -a /etc/locale.gen > /dev/null")
 	);
-		strcpy(input_locale_gen, "variable=");
+		strcpy(input_locale_gen, "search=\"^");
 		strncat(input_locale_gen, lang, 9);
-		strcat(input_locale_gen, " ; sed \"s/# \"$variable\"/\"$variable\"/gi\" /etc/locale.gen | sudo tee /etc/locale.gen > /dev/null");
+		strcat(input_locale_gen, "\" ; result=$(grep $search /usr/share/i18n/SUPPORTED) ; grep -v \"$result\" /etc/locale.gen | sudo tee /etc/locale.gen > /dev/null ; echo $result | sudo tee -a /etc/locale.gen > /dev/null");
 	run_command(input_locale_gen);
 	free(input_locale_gen);
 }
@@ -241,8 +238,8 @@ void reboot_ask(int seconds_to_wait){
 	if (*prompt_input == 'y'){
 		free(prompt_input);
 		// Reboot, same as:
-		// $ echo "Close to cancel reboot.";for i in 1 2 3 4 5; do echo "$i"; sleep 1; done ; echo "Rebooting..."; sleep 1; sudo reboot now
-		printf("\nClose to cancel rebooting.\n");
+		// $ echo "Reboot countdown:";for i in 1 2 3 4 5; do echo "$i"; sleep 1; done ; echo "Rebooting..."; sudo reboot now
+		printf("\nReboot countdown:\n");
 
 		// Countdown
 		for (; seconds_to_wait > 0; seconds_to_wait--){
@@ -255,7 +252,7 @@ void reboot_ask(int seconds_to_wait){
 	}
 	else
 	{
-		// Not reboot
+		// Do not reboot
 		free(prompt_input);
 	}
 }
@@ -281,10 +278,10 @@ int main (){
 		// Check if the LANG is installed -> locale -a
 		char *locale_installed;
 		bool is_locale_gen_needed = false;
-		for(int ln_i = 0; ln_i < ln_count-1; ln_i++){//-1 for null
+		for(int ln_i = 0; ln_i < ln_count-1; ln_i++){ //-1 for null
 
 			// $ locale -a 2> /dev/null | grep -i LANG
-			locale_installed = search_locale(*(locales_needed+ln_i));
+			locale_installed = search_locale_installed(*(locales_needed+ln_i));
 
 			if (*locale_installed == '\0'){
 				printf("Locale '%s' is not installed.\n", *(locales_needed+ln_i));
