@@ -74,4 +74,5 @@ grep -v "$result" /etc/locale.gen | sudo tee /etc/locale.gen > /dev/null;
 echo $result | sudo tee -a /etc/locale.gen > /dev/null
 ```
 Gerekli paketler `locale.gen` listesine eklendikten sonra `run_command("sudo locale-gen")` ile gerekli dil paketleri yüklenir. Onaylandıktan sonra, `lang_value` değerine göre hangi dilin doğrulanmış değerlerinin (örn: `LOCALE_TURKISH`) `locale` dosyasına yazılacağı karar verilerek yazılır.
+
 *Son*
