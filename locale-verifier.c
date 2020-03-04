@@ -267,7 +267,7 @@ int main (){
 		fclose(current_locale_fp);
 		fclose(current_localegen_fp);
 		
-		// Get the systems locale LANG
+		// Get the locale LANG
 		char *lang_value = run_command("cat /etc/default/locale 2> /dev/null | grep '^LANG=' | cut -d '=' -f2 | tr '\\n' '\\0'");
 		
 		// Extract the LANGs needed to be installed after verifying
@@ -290,7 +290,7 @@ int main (){
 			}
 			free(locale_installed);
 
-		}
+		}// for
 
 		// Generate Locales if needed
 		if (is_locale_gen_needed){
