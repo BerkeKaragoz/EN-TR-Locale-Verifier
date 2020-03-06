@@ -1,9 +1,17 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <ctype.h>
 #include <string.h>
 #include <unistd.h>
 #include <assert.h>
+#include <stdbool.h>
+
+#define DEBUG_LV
+
+#ifdef DEBUG_LV
+#include <time.h>
+#endif
 
 #define LOCALE_FILENAME "/etc/default/locale"
 #define LOCALEGEN_FILENAME "/etc/locale.gen"
@@ -14,9 +22,27 @@
 #define STR(X) #X
 #define ADD_QUOTES(X) "\""X"\""
 
+#define BYTE_TO_BINARY_PATTERN "%c%c%c%c%c%c%c%c"
+#define BYTE_TO_BINARY(byte)  \
+  (byte & 0x80 ? '1' : '0'), \
+  (byte & 0x40 ? '1' : '0'), \
+  (byte & 0x20 ? '1' : '0'), \
+  (byte & 0x10 ? '1' : '0'), \
+  (byte & 0x08 ? '1' : '0'), \
+  (byte & 0x04 ? '1' : '0'), \
+  (byte & 0x02 ? '1' : '0'), \
+  (byte & 0x01 ? '1' : '0')
+
+#define STR_RED(X) 	"\033[1;31m"X"\033[0m"
+#define STR_CYAN(X) "\033[1;34m"X"\033[0m"
+#define STR_BOLD(X) "\e[1;37m"X"\e[0m"
+
+#define PRINT_BYTE(X) 	printf(STR_CYAN(#X)": "BYTE_TO_BINARY_PATTERN" "BYTE_TO_BINARY_PATTERN"\n", BYTE_TO_BINARY(X>>8), BYTE_TO_BINARY(X));
+#define SOUT(T, X)		printf(STR_CYAN(#X)": %"T"\n", X);
+
 #define LOCALE_TURKISH "\
 LANG="				""		LANG_TR_TR	"\n\
-LANGUAGE="								"\n\
+LANGUAGE="			""					"\n\
 LC_CTYPE="			"\""	LANG_EN_US	"\"\n\
 LC_NUMERIC="		"\""	LANG_TR_TR	"\"\n\
 LC_TIME="			"\""	LANG_TR_TR	"\"\n\
@@ -33,7 +59,7 @@ LC_ALL="								"\n"
 
 #define LOCALE_ENGLISH "\
 LANG="				""		LANG_EN_US	"\n\
-LANGUAGE="								"\n\
+LANGUAGE="			""					"\n\
 LC_CTYPE="			"\""	LANG_EN_US	"\"\n\
 LC_NUMERIC="		"\""	LANG_EN_US	"\"\n\
 LC_TIME="			"\""	LANG_EN_US	"\"\n\
@@ -48,12 +74,22 @@ LC_MEASUREMENT="	"\""	LANG_EN_US	"\"\n\
 LC_IDENTIFICATION="	"\""	LANG_EN_US	"\"\n\
 LC_ALL="								"\n"
 
-typedef enum {false, true} bool;
+
+//		 		   Languages  OtherArgs
+//		 		_______|______  __|_
+//				0000 0000 0000  0000
+enum Flag{
+	Flag_Empty	 = 				  0b0, // All 0
+	Flag_Unique	 = 			   0b0001, // Get one only
+	Flag_Verify  = 			   0b0010,
+	Flag_English = 0b0000000000010000,
+	Flag_Turkish = 0b0000000000100000
+};
 
 // Returns STR's size 
 size_t strptrlen(char *str){
 	char *tmp = str;
-	unsigned int str_lenght = 0;
+	uint16_t str_lenght = 0;
 	// Count STR's lenght
 	while(*tmp++) str_lenght++;
 	return (size_t) str_lenght * sizeof(char);
@@ -115,7 +151,9 @@ bool write_to_file(char *str, char *filename){
 
 	if (fp != NULL){
 		fprintf(fp, "%s", str);
-		printf("\n| --- Written --- |\n%s\n", str);
+#ifdef DEBUG_LV
+		printf("\n"STR_CYAN("| --- Written --- |")"\n\e[3;37m%s\n"STR_CYAN("| --- EOF --- |")"\n", str);
+#endif
 		fclose(fp);
 		return true;
 	} else {
@@ -146,6 +184,25 @@ char* run_command(char* command){
 
 	pclose(fp);
 	return output;
+}
+
+// Parses the string (LANG_VALUE) to FLAGS
+bool set_language_flag(uint16_t *flags, char *lang_value){
+	if (!strcmp(lang_value, LANG_EN_US))
+	{
+		*flags |= Flag_English;
+	}
+	else if (!strcmp(lang_value, LANG_TR_TR))
+	{
+		*flags |= Flag_Turkish;
+	}
+	else 
+	{
+		*flags |= Flag_English;
+		fprintf(stderr, STR_BOLD("LANG")" not detected defaulted to "STR_BOLD("English")".\n");
+		return false;
+	}
+	return true;
 }
 
 // Get LANG and write verified values to LOCALE_FILENAME
@@ -222,32 +279,51 @@ void add_lang_to_localegen(char* lang){
 }
 
 // Ask if the user want to reboot X seconds, and do it.
-void reboot_ask(int seconds_to_wait){
-	printf("\nLocale is verified, do you want to reboot to apply settings? (y/n): ");
+void reboot_ask(uint16_t seconds_to_wait, uint16_t flags){
 	char *prompt_input = (char *)malloc(0);
-	scanf("%s", prompt_input);
-
-	*prompt_input = tolower(*prompt_input);
-	int i = 0;
-	while(*prompt_input != 'y' && *prompt_input != 'n' && i < 4){
-		printf("\nType 'y' or 'n': ");
+	if (flags & Flag_Turkish){
+		fprintf(stderr, "\nDil paketi doğrulandı, ayarları uygulamak için baştan başlatmak ister misiniz? (e/h): ");
 		scanf("%s", prompt_input);
-		i++;
-	}
 
-	if (*prompt_input == 'y'){
+		*prompt_input = tolower(*prompt_input);
+		uint16_t i = 0;
+		while(*prompt_input != 'e' && *prompt_input != 'h' && i < 4){
+			fprintf(stderr, "\n Lütfen 'e' (evet) ve ya 'h' (hayır) yazınız: ");
+			scanf("%s", prompt_input);
+			i++;
+		}
+	}
+	else{
+		fprintf(stderr, "\nLocale is verified, do you want to reboot to apply settings? (y/n): ");
+		scanf("%s", prompt_input);
+
+		*prompt_input = tolower(*prompt_input);
+		uint16_t i = 0;
+		while(*prompt_input != 'y' && *prompt_input != 'n' && i < 4){
+			fprintf(stderr, "\n Type 'y' (yes) or 'n' (no): ");
+			scanf("%s", prompt_input);
+			i++;
+		}
+	}
+	if (*prompt_input == 'y' || *prompt_input == 'e'){
 		free(prompt_input);
 		// Reboot, same as:
 		// $ echo "Reboot countdown:";for i in 1 2 3 4 5; do echo "$i"; sleep 1; done ; echo "Rebooting..."; sudo reboot now
-		printf("\nReboot countdown:\n");
+		if (flags & Flag_Turkish)
+			fprintf(stderr, "\nYeniden başlatma gerisayımı:\n");
+		else
+			fprintf(stderr, "\nReboot countdown:\n");
 
 		// Countdown
 		for (; seconds_to_wait > 0; seconds_to_wait--){
 			printf("%d\n", seconds_to_wait);
 			sleep(1);
 		}
+		if (flags & Flag_Turkish)
+			fprintf(stderr, "Yeniden başlatılıyor...\n");
+		else
+			fprintf(stderr, "\nRebooting...\n");
 
-		printf("\nRebooting...\n");
 		run_command("sudo reboot now");
 	}
 	else
@@ -257,7 +333,11 @@ void reboot_ask(int seconds_to_wait){
 	}
 }
 
-int main (){
+int main (int argc, char * const argv[]){
+#ifdef DEBUG_LV
+	clock_t begin = clock();
+#endif
+
 	FILE *current_locale_fp = fopen(LOCALE_FILENAME, "r");
 	FILE *current_localegen_fp = fopen(LOCALEGEN_FILENAME, "a");
 
@@ -266,10 +346,80 @@ int main (){
 	{
 		fclose(current_locale_fp);
 		fclose(current_localegen_fp);
+
+		uint16_t flags = Flag_Empty;
 		
 		// Get the locale LANG
 		char *lang_value = run_command("cat /etc/default/locale 2> /dev/null | grep '^LANG=' | cut -d '=' -f2 | tr '\\n' '\\0'");
+
+		set_language_flag(&flags, lang_value);
 		
+		extern char* optarg;
+		int32_t opt;
+		while ((opt = getopt(argc, argv, "vl:L")) != -1) {
+
+			switch (opt) {
+				case 'v':
+					if (flags & Flag_Turkish)
+						fprintf(stderr, "Sistem dili "STR_BOLD("dogrulanacak")".\n");
+					else
+						fprintf(stderr, "System language will be "STR_BOLD("verified")".\n");
+					flags = Flag_Verify | Flag_Unique;
+				break;
+
+				case 'l':
+					if ( !strcmp("tr", optarg) ){
+						flags = Flag_Turkish;
+						fprintf(stderr, "Sistem dili "STR_BOLD("Türkçe")"'ye "STR_BOLD("(Turkish)")" cevrilecek.\n");
+					} else if ( !strcmp("en", optarg) ) {
+						flags = Flag_English;
+						fprintf(stderr, "System language will be changed to "STR_BOLD("English")".\n");
+					} else {
+						fprintf(stderr, "$ %s -l [\""STR_BOLD("en")"\", \""STR_BOLD("tr")"\"]\n", argv[0]);
+					}
+				break;
+
+				default:
+					#define _ARGS_ "[-vl]"
+				
+					if (flags & Flag_Turkish)
+						fprintf(stderr, "Kullanimi: %s "_ARGS_" [deger]\n", argv[0]);
+					else
+						fprintf(stderr, "Usage: %s "_ARGS_" [value]\n", argv[0]);
+
+					#undef _ARGS_
+					exit(EXIT_FAILURE);
+			}//switch
+
+		if (flags & Flag_Unique){
+			break;
+		}
+#ifdef DEBUG_LV
+			SOUT("c", opt);
+			SOUT("d", argc);
+			SOUT("s", optarg);
+			PRINT_BYTE(flags);
+#endif
+		} /*else {//opt
+			flags = Flag_Verify;
+			fprintf(stderr, "System language will be "STR_BOLD("verified")".\n");
+		}*/
+
+
+
+		if (!(flags & Flag_Verify)){
+			lang_value = NULL;
+			free(lang_value);	
+		}
+
+		if (flags & Flag_Turkish) {
+			lang_value = (char *)malloc(sizeof(LANG_TR_TR));
+			strcpy(lang_value, LANG_TR_TR);
+		} else {
+			lang_value = (char *)malloc(sizeof(LANG_EN_US));
+			strcpy(lang_value, LANG_EN_US);
+		}
+
 		// Extract the LANGs needed to be installed after verifying
 		size_t ln_count; // ln == locales_needed
 		char **locales_needed = !strcmp(lang_value, LANG_TR_TR) ?
@@ -278,13 +428,16 @@ int main (){
 		// Check if the LANG is installed -> locale -a
 		char *locale_installed;
 		bool is_locale_gen_needed = false;
-		for(int ln_i = 0; ln_i < ln_count-1; ln_i++){ //-1 for null
+		for(uint16_t ln_i = 0; ln_i < ln_count-1; ln_i++){ //-1 for null
 
 			// $ locale -a 2> /dev/null | grep -i LANG
 			locale_installed = search_locale_installed(*(locales_needed+ln_i));
 
 			if (*locale_installed == '\0'){
-				printf("Locale '%s' is not installed.\n", *(locales_needed+ln_i));
+				if (flags & Flag_Turkish)
+					fprintf(stderr, "'%s' yerel dil paketi yuklu degil.\n", *(locales_needed+ln_i));
+				else
+					fprintf(stderr, "Locale '%s' is not installed.\n", *(locales_needed+ln_i));
 				is_locale_gen_needed = true;
 				add_lang_to_localegen(*(locales_needed+ln_i));
 			}
@@ -294,20 +447,31 @@ int main (){
 
 		// Generate Locales if needed
 		if (is_locale_gen_needed){
-			printf("Installing locales...\n");
+			if (flags & Flag_Turkish)
+				fprintf(stderr, "Dil paketleri yukleniyor...\n");
+			else
+				fprintf(stderr, "Installing locales...\n");
 			run_command("sudo locale-gen");
 		}
 
 		// Write to verified locale to /etc/default/locale
 		if (write_lang_to_locale(lang_value, LOCALE_FILENAME))
-			reboot_ask(5); else printf("Verification failed.\n"); free(lang_value);
+			reboot_ask(5, flags); else printf("Verification failed.\n");
+		
+		free(lang_value);
 
 	}// if file pointer is null
 	else
 	{
-		printf("Cannot open required files, permissions are denied!\n");
+		fprintf(stderr,\
+			STR_BOLD("(TR)")" Gerekli dosyalar acilamiyor, izinler red edildi!\n"\
+			STR_BOLD("(EN)")" Cannot open the required files, permissions are denied!\n"\
+		);
 		exit(1);
 	}
-
+#ifdef DEBUG_LV
+	clock_t end = clock();
+	printf(STR_CYAN("Execution time") " = %lf\n", (double)(end - begin) / CLOCKS_PER_SEC);
+#endif
 	return 0;
 }// main
