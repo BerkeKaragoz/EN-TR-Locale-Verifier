@@ -7,7 +7,7 @@
 #include <assert.h>
 #include <stdbool.h>
 
-#define DEBUG_LV
+//#define DEBUG_LV
 
 #ifdef DEBUG_LV
 #include <time.h>
@@ -74,16 +74,16 @@ LC_MEASUREMENT="	"\""	LANG_EN_US	"\"\n\
 LC_IDENTIFICATION="	"\""	LANG_EN_US	"\"\n\
 LC_ALL="								"\n"
 
-
+//				 	(Unique)
 //		 		   Languages  OtherArgs
 //		 		_______|______  __|_
 //				0000 0000 0000  0000
 enum Flag{
 	Flag_Empty	 = 				  0b0, // All 0
-	Flag_Unique	 = 			   0b0001, // Get one only
-	Flag_Verify  = 			   0b0010,
+	Flag_Unique	 = 			   0b0001, // Get one only, do not check other args
+	Flag_Verify  = 			   0b0010, 
 	Flag_English = 0b0000000000010000,
-	Flag_Turkish = 0b0000000000100000
+	Flag_Turkish = 0b0000000000100000 
 };
 
 // Returns STR's size 
@@ -279,10 +279,10 @@ void add_lang_to_localegen(char* lang){
 }
 
 // Ask if the user want to reboot X seconds, and do it.
-void reboot_ask(uint16_t seconds_to_wait, uint16_t flags){
+void restart_session_ask(uint16_t seconds_to_wait, uint16_t flags){
 	char *prompt_input = (char *)malloc(0);
 	if (flags & Flag_Turkish){
-		fprintf(stderr, "\nDil paketi doğrulandı, ayarları uygulamak için baştan başlatmak ister misiniz? (e/h): ");
+		fprintf(stderr, "\nDil paketi doğrulandı, ayarları uygulamak için " STR_BOLD("oturumu yeniden başlatmak") " ister misiniz? (e/h): ");
 		scanf("%s", prompt_input);
 
 		*prompt_input = tolower(*prompt_input);
@@ -294,7 +294,7 @@ void reboot_ask(uint16_t seconds_to_wait, uint16_t flags){
 		}
 	}
 	else{
-		fprintf(stderr, "\nLocale is verified, do you want to reboot to apply settings? (y/n): ");
+		fprintf(stderr, "\nLocale is verified, do you want to " STR_BOLD("restart the session")" to apply the settings? (y/n): ");
 		scanf("%s", prompt_input);
 
 		*prompt_input = tolower(*prompt_input);
@@ -307,24 +307,20 @@ void reboot_ask(uint16_t seconds_to_wait, uint16_t flags){
 	}
 	if (*prompt_input == 'y' || *prompt_input == 'e'){
 		free(prompt_input);
-		// Reboot, same as:
-		// $ echo "Reboot countdown:";for i in 1 2 3 4 5; do echo "$i"; sleep 1; done ; echo "Rebooting..."; sudo reboot now
-		if (flags & Flag_Turkish)
-			fprintf(stderr, "\nYeniden başlatma gerisayımı:\n");
-		else
-			fprintf(stderr, "\nReboot countdown:\n");
+
+		if (flags & Flag_Turkish)	fprintf(stderr, "\nGerisayım:\n");
+		else						fprintf(stderr, "\nCountdown:\n");
 
 		// Countdown
 		for (; seconds_to_wait > 0; seconds_to_wait--){
 			printf("%d\n", seconds_to_wait);
 			sleep(1);
 		}
-		if (flags & Flag_Turkish)
-			fprintf(stderr, "Yeniden başlatılıyor...\n");
-		else
-			fprintf(stderr, "\nRebooting...\n");
 
-		run_command("sudo reboot now");
+		if (flags & Flag_Turkish) 	fprintf(stderr, "\nOturum yeniden başlatılıyor...\n");
+		else						fprintf(stderr, "\nRestarting the session...\n");
+
+		run_command("sudo service lightdm restart");
 	}
 	else
 	{
@@ -400,12 +396,7 @@ int main (int argc, char * const argv[]){
 			SOUT("s", optarg);
 			PRINT_BYTE(flags);
 #endif
-		} /*else {//opt
-			flags = Flag_Verify;
-			fprintf(stderr, "System language will be "STR_BOLD("verified")".\n");
-		}*/
-
-
+		}
 
 		if (!(flags & Flag_Verify)){
 			lang_value = NULL;
@@ -456,7 +447,7 @@ int main (int argc, char * const argv[]){
 
 		// Write to verified locale to /etc/default/locale
 		if (write_lang_to_locale(lang_value, LOCALE_FILENAME))
-			reboot_ask(5, flags); else printf("Verification failed.\n");
+			restart_session_ask(3, flags); else printf("Verification failed.\n");
 		
 		free(lang_value);
 
@@ -467,11 +458,12 @@ int main (int argc, char * const argv[]){
 			STR_BOLD("(TR)")" Gerekli dosyalar acilamiyor, izinler red edildi!\n"\
 			STR_BOLD("(EN)")" Cannot open the required files, permissions are denied!\n"\
 		);
-		exit(1);
+
+		exit(EXIT_FAILURE);
 	}
 #ifdef DEBUG_LV
 	clock_t end = clock();
 	printf(STR_CYAN("Execution time") " = %lf\n", (double)(end - begin) / CLOCKS_PER_SEC);
 #endif
-	return 0;
+	return (EXIT_SUCCESS);
 }// main
