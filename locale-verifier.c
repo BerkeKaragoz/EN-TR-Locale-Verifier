@@ -81,7 +81,8 @@ LC_ALL="								"\n"
 enum Flag{
 	Flag_Empty	 = 				  0b0, // All 0
 	Flag_Unique	 = 			   0b0001, // Get one only, do not check other args
-	Flag_Verify  = 			   0b0010, 
+	Flag_Verify  = 			   0b0010,
+	Flag_Force	 =			   0b0100,
 	Flag_English = 0b0000000000010000,
 	Flag_Turkish = 0b0000000000100000 
 };
@@ -350,9 +351,12 @@ int main (int argc, char * const argv[]){
 
 		set_language_flag(&flags, lang_value);
 		
+		printf("\n");
+
 		extern char* optarg;
 		int32_t opt;
-		while ((opt = getopt(argc, argv, "vl:L")) != -1) {
+		#define _ARGS_ "fhvl"
+		while ((opt = getopt(argc, argv, _ARGS_":L")) != -1) {
 
 			switch (opt) {
 				case 'v':
@@ -360,43 +364,69 @@ int main (int argc, char * const argv[]){
 						fprintf(stderr, "Sistem dili "STR_BOLD("dogrulanacak")".\n");
 					else
 						fprintf(stderr, "System language will be "STR_BOLD("verified")".\n");
-					flags = Flag_Verify | Flag_Unique;
+					flags |= Flag_Verify | Flag_Unique;
 				break;
 
 				case 'l':
+					if (flags & Flag_Unique){
+						break;
+					}
 					if ( !strcmp("tr", optarg) ){
-						flags = Flag_Turkish;
+						flags |= Flag_Turkish;
 						fprintf(stderr, "Sistem dili "STR_BOLD("Türkçe")"'ye "STR_BOLD("(Turkish)")" cevrilecek.\n");
 					} else if ( !strcmp("en", optarg) ) {
-						flags = Flag_English;
+						flags |= Flag_English;
 						fprintf(stderr, "System language will be changed to "STR_BOLD("English")".\n");
 					} else {
-						fprintf(stderr, "$ %s -l [\""STR_BOLD("en")"\", \""STR_BOLD("tr")"\"]\n", argv[0]);
+						fprintf(stderr, "$ sudo %s -l [\""STR_BOLD("en")"\", \""STR_BOLD("tr")"\"]\n", argv[0]);
+						exit(EXIT_FAILURE);
 					}
 				break;
 
-				default:
-					#define _ARGS_ "[-vl]"
-				
+				case 'h':
 					if (flags & Flag_Turkish)
-						fprintf(stderr, "Kullanimi: %s "_ARGS_" [deger]\n", argv[0]);
+						fprintf(stderr, \
+						" --- Yardim --- \n"\
+						"\t      Kullanimi ("STR_BOLD("h")"elp):\tsudo %s [-"_ARGS_"] [deger]\n"\
+						" Dili dogrulamak icin ("STR_BOLD("v")"erify):\t-v\n"\
+						"      Dili degisimi ("STR_BOLD("l")"anguage):\t-l [\""STR_BOLD("en")"\", \""STR_BOLD("tr")"\"]\n"\
+						"Girdi istenmemesi icin ("STR_BOLD("f")"orce):\t-f [-"_ARGS_"] [deger]\n"\
+						" --- \n\n", \
+						argv[0]);
 					else
-						fprintf(stderr, "Usage: %s "_ARGS_" [value]\n", argv[0]);
+						fprintf(stderr, \
+						" --- Help --- \n"\
+						"\t\t Usage ("STR_BOLD("h")"elp):\tsudo %s [-"_ARGS_"] [value]\n"\
+						"       To "STR_BOLD("v")"erify the language:\t-v\n"\
+						"       To change the "STR_BOLD("l")"anguage:\t-l [\""STR_BOLD("en")"\", \""STR_BOLD("tr")"\"]\n"\
+						"Do not ask for inputs ("STR_BOLD("f")"orce):\t-f [-"_ARGS_"] [value]\n"\
+						" --- \n\n", \
+						argv[0]);
 
-					#undef _ARGS_
+					exit(EXIT_SUCCESS);
+				break;
+
+				case 'f':
+					fprintf(stderr, " - Force Mode - \n");
+					flags |= Flag_Force;
+				break;
+
+				default:				
+					if (flags & Flag_Turkish)
+						fprintf(stderr, "Kullanimi: sudo %s [-"_ARGS_"] [deger]\n", argv[0]);
+					else
+						fprintf(stderr, "Usage: sudo %s [-"_ARGS_"] [value]\n", argv[0]);
 					exit(EXIT_FAILURE);
 			}//switch
 
-		if (flags & Flag_Unique){
-			break;
-		}
 #ifdef DEBUG_LV
 			SOUT("c", opt);
 			SOUT("d", argc);
 			SOUT("s", optarg);
 			PRINT_BYTE(flags);
 #endif
-		}
+		}//while
+		#undef _ARGS_
 
 		if (!(flags & Flag_Verify)){
 			lang_value = NULL;
@@ -447,7 +477,16 @@ int main (int argc, char * const argv[]){
 
 		// Write to verified locale to /etc/default/locale
 		if (write_lang_to_locale(lang_value, LOCALE_FILENAME))
-			restart_session_ask(3, flags); else printf("Verification failed.\n");
+		{
+			if (!(flags & Flag_Force))
+			{
+				restart_session_ask(3, flags);
+			}
+		}
+		else
+		{
+			printf("Verification failed.\n");
+		}
 		
 		free(lang_value);
 
