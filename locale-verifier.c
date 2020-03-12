@@ -7,11 +7,17 @@
 #include <assert.h>
 #include <stdbool.h>
 
-//#define DEBUG_LV
+#define DEBUG_LV
+//#define HTML_OUTPUT
 
 #ifdef DEBUG_LV
 #include <time.h>
 #endif
+// 1 0 0
+// 1 1 1
+// 0 0 0
+// 0 1 1 
+#define STD_OUT stdout
 
 #define LOCALE_FILENAME "/etc/default/locale"
 #define LOCALEGEN_FILENAME "/etc/locale.gen"
@@ -33,9 +39,17 @@
   (byte & 0x02 ? '1' : '0'), \
   (byte & 0x01 ? '1' : '0')
 
+#ifdef HTML_OUTPUT
+#define STR_RED(X) 	"<span style=\"color:red\">"X"</span>"
+#define STR_CYAN(X) "<span style=\"color:blue\">"X"</span>"
+#define STR_BOLD(X) "<span style=\"font-weight:600;\">"X"</span>"
+#define NL "<br>" // only for forcemode outputs
+#else
 #define STR_RED(X) 	"\033[1;31m"X"\033[0m"
 #define STR_CYAN(X) "\033[1;34m"X"\033[0m"
 #define STR_BOLD(X) "\e[1;37m"X"\e[0m"
+#define NL "\n"
+#endif
 
 #define PRINT_BYTE(X) 	printf(STR_CYAN(#X)": "BYTE_TO_BINARY_PATTERN" "BYTE_TO_BINARY_PATTERN"\n", BYTE_TO_BINARY(X>>8), BYTE_TO_BINARY(X));
 #define SOUT(T, X)		printf(STR_CYAN(#X)": %"T"\n", X);
@@ -200,7 +214,7 @@ bool set_language_flag(uint16_t *flags, char *lang_value){
 	else 
 	{
 		*flags |= Flag_English;
-		fprintf(stderr, STR_BOLD("LANG")" not detected defaulted to "STR_BOLD("English")".\n");
+		fprintf(STD_OUT, STR_BOLD("LANG")" not detected defaulted to "STR_BOLD("English")".\n");
 		return false;
 	}
 	return true;
@@ -279,29 +293,29 @@ void add_lang_to_localegen(char* lang){
 	free(input_locale_gen);
 }
 
-// Ask if the user want to reboot X seconds, and do it.
+// Ask if the user want to restart X seconds, and do it.
 void restart_session_ask(uint16_t seconds_to_wait, uint16_t flags){
 	char *prompt_input = (char *)malloc(0);
 	if (flags & Flag_Turkish){
-		fprintf(stderr, "\nDil paketi doğrulandı, ayarları uygulamak için " STR_BOLD("oturumu yeniden başlatmak") " ister misiniz? (e/h): ");
+		fprintf(STD_OUT, "\nDil paketi doğrulandı, ayarları uygulamak için " STR_BOLD("oturumu yeniden başlatmak") " ister misiniz? (e/h): ");
 		scanf("%s", prompt_input);
 
 		*prompt_input = tolower(*prompt_input);
 		uint16_t i = 0;
 		while(*prompt_input != 'e' && *prompt_input != 'h' && i < 4){
-			fprintf(stderr, "\n Lütfen 'e' (evet) ve ya 'h' (hayır) yazınız: ");
+			fprintf(STD_OUT, "\n Lütfen 'e' (evet) ve ya 'h' (hayır) yazınız: ");
 			scanf("%s", prompt_input);
 			i++;
 		}
 	}
 	else{
-		fprintf(stderr, "\nLocale is verified, do you want to " STR_BOLD("restart the session")" to apply the settings? (y/n): ");
+		fprintf(STD_OUT, "\nLocale is verified, do you want to " STR_BOLD("restart the session")" to apply the settings? (y/n): ");
 		scanf("%s", prompt_input);
 
 		*prompt_input = tolower(*prompt_input);
 		uint16_t i = 0;
 		while(*prompt_input != 'y' && *prompt_input != 'n' && i < 4){
-			fprintf(stderr, "\n Type 'y' (yes) or 'n' (no): ");
+			fprintf(STD_OUT, "\n Type 'y' (yes) or 'n' (no): ");
 			scanf("%s", prompt_input);
 			i++;
 		}
@@ -309,8 +323,8 @@ void restart_session_ask(uint16_t seconds_to_wait, uint16_t flags){
 	if (*prompt_input == 'y' || *prompt_input == 'e'){
 		free(prompt_input);
 
-		if (flags & Flag_Turkish)	fprintf(stderr, "\nGerisayım:\n");
-		else						fprintf(stderr, "\nCountdown:\n");
+		if (flags & Flag_Turkish)	fprintf(STD_OUT, "\nGerisayım:\n");
+		else						fprintf(STD_OUT, "\nCountdown:\n");
 
 		// Countdown
 		for (; seconds_to_wait > 0; seconds_to_wait--){
@@ -318,8 +332,8 @@ void restart_session_ask(uint16_t seconds_to_wait, uint16_t flags){
 			sleep(1);
 		}
 
-		if (flags & Flag_Turkish) 	fprintf(stderr, "\nOturum yeniden başlatılıyor...\n");
-		else						fprintf(stderr, "\nRestarting the session...\n");
+		if (flags & Flag_Turkish) 	fprintf(STD_OUT, "\nOturum yeniden başlatılıyor...\n");
+		else						fprintf(STD_OUT, "\nRestarting the session...\n");
 
 		run_command("sudo service lightdm restart");
 	}
@@ -351,7 +365,7 @@ int main (int argc, char * const argv[]){
 
 		set_language_flag(&flags, lang_value);
 		
-		printf("\n");
+		printf(NL);
 
 		extern char* optarg;
 		int32_t opt;
@@ -361,9 +375,9 @@ int main (int argc, char * const argv[]){
 			switch (opt) {
 				case 'v':
 					if (flags & Flag_Turkish)
-						fprintf(stderr, "Sistem dili "STR_BOLD("dogrulanacak")".\n");
+						fprintf(STD_OUT, "Sistem dili "STR_BOLD("dogrulanacak")"."NL);
 					else
-						fprintf(stderr, "System language will be "STR_BOLD("verified")".\n");
+						fprintf(STD_OUT, "System language will be "STR_BOLD("verified")"."NL);
 					flags |= Flag_Verify | Flag_Unique;
 				break;
 
@@ -372,50 +386,52 @@ int main (int argc, char * const argv[]){
 						break;
 					}
 					if ( !strcmp("tr", optarg) ){
+						flags &= ~Flag_English;
 						flags |= Flag_Turkish;
-						fprintf(stderr, "Sistem dili "STR_BOLD("Türkçe")"'ye "STR_BOLD("(Turkish)")" cevrilecek.\n");
+						fprintf(STD_OUT, "Sistem dili "STR_BOLD("Türkçe")"'ye "STR_BOLD("(Turkish)")" cevrilecek."NL);
 					} else if ( !strcmp("en", optarg) ) {
+						flags &= ~Flag_Turkish;
 						flags |= Flag_English;
-						fprintf(stderr, "System language will be changed to "STR_BOLD("English")".\n");
+						fprintf(STD_OUT, "System language will be changed to "STR_BOLD("English")"."NL);
 					} else {
-						fprintf(stderr, "$ sudo %s -l [\""STR_BOLD("en")"\", \""STR_BOLD("tr")"\"]\n", argv[0]);
+						fprintf(STD_OUT, "$ sudo %s -l [\""STR_BOLD("en")"\", \""STR_BOLD("tr")"\"]"NL, argv[0]);
 						exit(EXIT_FAILURE);
 					}
 				break;
 
 				case 'h':
 					if (flags & Flag_Turkish)
-						fprintf(stderr, \
-						" --- Yardim --- \n"\
-						"\t      Kullanimi ("STR_BOLD("h")"elp):\tsudo %s [-"_ARGS_"] [deger]\n"\
-						" Dili dogrulamak icin ("STR_BOLD("v")"erify):\t-v\n"\
-						"      Dili degisimi ("STR_BOLD("l")"anguage):\t-l [\""STR_BOLD("en")"\", \""STR_BOLD("tr")"\"]\n"\
-						"Girdi istenmemesi icin ("STR_BOLD("f")"orce):\t-f [-"_ARGS_"] [deger]\n"\
-						" --- \n\n", \
+						fprintf(STD_OUT, \
+							" --- Yardim --- \n"\
+							"\t      Kullanimi ("STR_BOLD("h")"elp):\tsudo %s [-"_ARGS_"] [deger]\n"\
+							" Dili dogrulamak icin ("STR_BOLD("v")"erify):\t-v\n"\
+							"      Dili degisimi ("STR_BOLD("l")"anguage):\t-l [\""STR_BOLD("en")"\", \""STR_BOLD("tr")"\"]\n"\
+							"Girdi istenmemesi icin ("STR_BOLD("f")"orce):\t-f [-"_ARGS_"] [deger]\n"\
+							" --- \n\n", \
 						argv[0]);
 					else
-						fprintf(stderr, \
-						" --- Help --- \n"\
-						"\t\t Usage ("STR_BOLD("h")"elp):\tsudo %s [-"_ARGS_"] [value]\n"\
-						"       To "STR_BOLD("v")"erify the language:\t-v\n"\
-						"       To change the "STR_BOLD("l")"anguage:\t-l [\""STR_BOLD("en")"\", \""STR_BOLD("tr")"\"]\n"\
-						"Do not ask for inputs ("STR_BOLD("f")"orce):\t-f [-"_ARGS_"] [value]\n"\
-						" --- \n\n", \
+						fprintf(STD_OUT, \
+							" --- Help --- \n"\
+							"\t\t Usage ("STR_BOLD("h")"elp):\tsudo %s [-"_ARGS_"] [value]\n"\
+							"       To "STR_BOLD("v")"erify the language:\t-v\n"\
+							"       To change the "STR_BOLD("l")"anguage:\t-l [\""STR_BOLD("en")"\", \""STR_BOLD("tr")"\"]\n"\
+							"Do not ask for inputs ("STR_BOLD("f")"orce):\t-f [-"_ARGS_"] [value]\n"\
+							" --- \n\n", \
 						argv[0]);
 
 					exit(EXIT_SUCCESS);
 				break;
 
 				case 'f':
-					fprintf(stderr, " - Force Mode - \n");
+					fprintf(STD_OUT, " - Force Mode - "NL);
 					flags |= Flag_Force;
 				break;
 
 				default:				
 					if (flags & Flag_Turkish)
-						fprintf(stderr, "Kullanimi: sudo %s [-"_ARGS_"] [deger]\n", argv[0]);
+						fprintf(STD_OUT, "Kullanimi: sudo %s [-"_ARGS_"] [deger]"NL, argv[0]);
 					else
-						fprintf(stderr, "Usage: sudo %s [-"_ARGS_"] [value]\n", argv[0]);
+						fprintf(STD_OUT, "Usage: sudo %s [-"_ARGS_"] [value]"NL, argv[0]);
 					exit(EXIT_FAILURE);
 			}//switch
 
@@ -456,9 +472,9 @@ int main (int argc, char * const argv[]){
 
 			if (*locale_installed == '\0'){
 				if (flags & Flag_Turkish)
-					fprintf(stderr, "'%s' yerel dil paketi yuklu degil.\n", *(locales_needed+ln_i));
+					fprintf(STD_OUT, "'%s' yerel dil paketi yuklu degil.\n", *(locales_needed+ln_i));
 				else
-					fprintf(stderr, "Locale '%s' is not installed.\n", *(locales_needed+ln_i));
+					fprintf(STD_OUT, "Locale '%s' is not installed.\n", *(locales_needed+ln_i));
 				is_locale_gen_needed = true;
 				add_lang_to_localegen(*(locales_needed+ln_i));
 			}
@@ -469,9 +485,9 @@ int main (int argc, char * const argv[]){
 		// Generate Locales if needed
 		if (is_locale_gen_needed){
 			if (flags & Flag_Turkish)
-				fprintf(stderr, "Dil paketleri yukleniyor...\n");
+				fprintf(STD_OUT, "Dil paketleri yukleniyor...\n");
 			else
-				fprintf(stderr, "Installing locales...\n");
+				fprintf(STD_OUT, "Installing locales...\n");
 			run_command("sudo locale-gen");
 		}
 
@@ -493,7 +509,7 @@ int main (int argc, char * const argv[]){
 	}// if file pointer is null
 	else
 	{
-		fprintf(stderr,\
+		fprintf(STD_OUT,\
 			STR_BOLD("(TR)")" Gerekli dosyalar acilamiyor, izinler red edildi!\n"\
 			STR_BOLD("(EN)")" Cannot open the required files, permissions are denied!\n"\
 		);
