@@ -13,10 +13,7 @@
 #ifdef DEBUG_LV
 #include <time.h>
 #endif
-// 1 0 0
-// 1 1 1
-// 0 0 0
-// 0 1 1 
+
 #define STD_OUT stdout
 
 #define LOCALE_FILENAME "/etc/default/locale"

@@ -3,7 +3,7 @@
 
 #define TB_OUTPUT(EN,TR) "<br><span style=\" font-weight:600;\">(EN)</span> " EN \
     "</p><br><p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\"><span style=\" font-weight:600;\">" \
-    "(TR)</span> " TR "</p>"
+    "(TR)</span> " TR "<br></p>"
 #define BOLD_HTML(X) "<span style=\" font-weight:600;\">" X "</span>"
 
 QProcess *process = nullptr;
@@ -17,7 +17,7 @@ Dialog::Dialog(QWidget *parent) :
     ui->setupUi(this);
     ui->buttonBox->button(QDialogButtonBox::Apply)->setText("Apply (Uygula)");
     ui->buttonBox->button(QDialogButtonBox::Close)->setText("Close (Kapat)");
-
+    //runCommand("chmod 777 "+QDir::currentPath()+"/locale-verifier.o ");
 }
 
 Dialog::~Dialog()
@@ -52,7 +52,7 @@ void Dialog::on_buttonBox_clicked(QAbstractButton *button)
         ui->textBrowser->setHtml(TB_OUTPUT("Making the changes...",
                                            "Değişiklikler yapılıyor..."));
         ui->buttonBox->setEnabled(false);
-        runCommand("pkexec "+QDir::currentPath()+"/locale-verifier.o " + qFlags);
+        runCommand("pkexec "+QDir::currentPath()+"/locale-verifier " + qFlags);
     }
 }
 
@@ -81,9 +81,11 @@ void Dialog::onProcessFinished(){
     ui->buttonBox->setEnabled(true);
     fprintf(stderr, "Process finish.\n");
 
-    if (ui->textBrowser->document()->toPlainText().startsWith("Error", Qt::CaseInsensitive)){
+    QString tbQString = ui->textBrowser->document()->toPlainText();
+
+    if (tbQString.startsWith("Error", Qt::CaseInsensitive)){
         ui->textBrowser->setHtml(TB_OUTPUT("There was an error.",
-                                           "Bir hata oluştu."));
+                                           "Bir hata oluştu.")"<span style=\"color: red;\">" + tbQString + "</span>");
         ui->stateLabel->setText("Failed (Başarısız)");
     } else {
         ui->stateLabel->setText("Success (Başarılı)");
