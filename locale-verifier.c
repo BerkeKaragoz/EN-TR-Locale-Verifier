@@ -7,8 +7,8 @@
 #include <assert.h>
 #include <stdbool.h>
 
-#define DEBUG_LV
-//#define HTML_OUTPUT
+//#define DEBUG_LV
+#define HTML_OUTPUT
 
 #ifdef DEBUG_LV
 #include <time.h>
@@ -423,7 +423,9 @@ int main (int argc, char * const argv[]){
 				break;
 
 				case 'f':
+				#ifdef DEBUG_LV
 					fprintf(STD_OUT, " - Force Mode - "NL);
+				#endif
 					flags |= Flag_Force;
 				break;
 
@@ -472,9 +474,9 @@ int main (int argc, char * const argv[]){
 
 			if (*locale_installed == '\0'){
 				if (flags & Flag_Turkish)
-					fprintf(STD_OUT, "'%s' yerel dil paketi yuklu degil.\n", *(locales_needed+ln_i));
+					fprintf(STD_OUT, "'%s' yerel dil paketi yuklu degil."NL, *(locales_needed+ln_i));
 				else
-					fprintf(STD_OUT, "Locale '%s' is not installed.\n", *(locales_needed+ln_i));
+					fprintf(STD_OUT, "Locale '%s' is not installed."NL, *(locales_needed+ln_i));
 				is_locale_gen_needed = true;
 				add_lang_to_localegen(*(locales_needed+ln_i));
 			}
@@ -485,9 +487,9 @@ int main (int argc, char * const argv[]){
 		// Generate Locales if needed
 		if (is_locale_gen_needed){
 			if (flags & Flag_Turkish)
-				fprintf(STD_OUT, "Dil paketleri yukleniyor...\n");
+				fprintf(STD_OUT, "Dil paketleri yukleniyor..."NL);
 			else
-				fprintf(STD_OUT, "Installing locales...\n");
+				fprintf(STD_OUT, "Installing locales..."NL);
 			run_command("sudo locale-gen");
 		}
 
@@ -498,10 +500,17 @@ int main (int argc, char * const argv[]){
 			{
 				restart_session_ask(3, flags);
 			}
+			if (flags & Flag_Turkish)
+				fprintf(STD_OUT, "İşlem "STR_BOLD("tamamlandı")"."NL"Değişikliklerin uygulanabilmesi için "STR_BOLD("oturumunuzu yeniden başlatınız")"."NL);
+			else
+				fprintf(STD_OUT, "Process has been "STR_BOLD("successfully completed")"."NL STR_BOLD("Restart your session")" to apply the changes."NL);
 		}
 		else
 		{
-			printf("Verification failed.\n");
+			fprintf(STD_OUT,\
+				STR_BOLD("(TR)")" Dogrulama basarisiz oldu!"NL\
+				STR_BOLD("(EN)")" Verification failed!"NL\
+			);
 		}
 		
 		free(lang_value);
@@ -510,8 +519,8 @@ int main (int argc, char * const argv[]){
 	else
 	{
 		fprintf(STD_OUT,\
-			STR_BOLD("(TR)")" Gerekli dosyalar acilamiyor, izinler red edildi!\n"\
-			STR_BOLD("(EN)")" Cannot open the required files, permissions are denied!\n"\
+			STR_BOLD("(TR)")" Gerekli dosyalar acilamiyor, izinler red edildi!"NL\
+			STR_BOLD("(EN)")" Cannot open the required files, permissions are denied!"NL\
 		);
 
 		exit(EXIT_FAILURE);
