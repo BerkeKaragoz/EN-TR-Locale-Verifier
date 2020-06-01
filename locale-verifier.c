@@ -7,8 +7,10 @@
 #include <assert.h>
 #include <stdbool.h>
 
+/* --- Comment out the variables below depending on your needs. */
 //#define DEBUG_LV
 #define HTML_OUTPUT
+/* --- */
 
 #ifdef DEBUG_LV
 #include <time.h>

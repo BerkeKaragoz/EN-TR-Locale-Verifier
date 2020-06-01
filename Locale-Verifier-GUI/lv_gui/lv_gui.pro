@@ -19,10 +19,6 @@ DISTFILES += \
     locale-verifier
 
 unix{
-    QMAKE_POST_LINK += $$quote(cp $$PWD/locale-verifier $$OUT_PWD$$escape_expand(\n\t))
-    QMAKE_POST_LINK += $$quote(cp $$PWD/dict.png $$OUT_PWD$$escape_expand(\n\t))
-}
- win32 {
-    QMAKE_POST_LINK += $$quote(cmd /c copy /y $$PWD\locale-verifier $$OUT_PWD$$escape_expand(\n\t))
-    QMAKE_POST_LINK += $$quote(cmd /c copy /y $$PWD\dict.png $$OUT_PWD$$escape_expand(\n\t))
+    QMAKE_POST_LINK += $$quote(cp /usr/bin/locale-verifier )
+    QMAKE_POST_LINK += $$quote(cp /usr/share/locale-verifier/dict.png )
 }

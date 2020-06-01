@@ -52,7 +52,7 @@ void Dialog::on_buttonBox_clicked(QAbstractButton *button)
         ui->textBrowser->setHtml(TB_OUTPUT("Making the changes...",
                                            "Değişiklikler yapılıyor..."));
         ui->buttonBox->setEnabled(false);
-        runCommand("pkexec "+QDir::currentPath()+"/locale-verifier " + qFlags);
+        runCommand("pkexec /usr/bin/locale-verifier " + qFlags);
     }
 }
 

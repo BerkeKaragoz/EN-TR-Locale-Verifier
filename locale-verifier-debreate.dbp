@@ -1,0 +1,65 @@
+[DEBREATE-0.7.13-dev17]
+<<CTRL>>
+Package: locale-verifier-en-tr
+Version: 0.1
+Maintainer: E. Berke Karagöz <e.berkekaragoz@gmail.com>
+Architecture: amd64
+Priority: optional
+Depends: libc6-dev, libx11-xcb-dev, libglu1-mesa-dev, qtbase5-dev
+Description: Verifies the system locale.
+ Works for English and Turkish.
+<</CTRL>>
+<<FILES>>
+1
+/home/pardus-user-1/Desktop/EN-TR-Locale-Verifier/Locale-Verifier-GUI/build-lv_gui-Desktop-Debug/lv_gui* -> lv_gui -> /usr/bin
+/home/pardus-user-1/Desktop/EN-TR-Locale-Verifier/Locale-Verifier-GUI/lv_gui/locale-verifier* -> locale-verifier -> /usr/bin
+/home/pardus-user-1/Desktop/EN-TR-Locale-Verifier/Locale-Verifier-GUI/lv_gui/dict.png -> dict.png -> /usr/share/locale-verifier
+<</FILES>>
+<<SCRIPTS>>
+<<PREINST>>
+0
+<</PREINST>>
+<<POSTINST>>
+1
+sudo chmod 755 /usr/bin/locale-verifier
+sudo chmod 755 /usr/bin/lv_gui
+<</POSTINST>>
+<<PRERM>>
+0
+<</PRERM>>
+<<POSTRM>>
+0
+<</POSTRM>>
+<</SCRIPTS>>
+<<CHANGELOG>>
+<<DEST>>DEFAULT<</DEST>>
+locale-verifier-en-tr (0.1) ; urgency=low
+
+  * Initial.
+
+ -- E. Berke Karagöz <e.berkekaragoz@gmail.com>  Mon, 01 Jun 2020 None +0300
+
+<</CHANGELOG>>
+<<COPYRIGHT>>
+Copyright © 2020 <copyright holder(s)> [<email>]
+
+/usr/share/common-licenses/LGPL-3
+<</COPYRIGHT>>
+<<MENU>>
+1
+Name=Locale-Verifier-EN-TR
+Version=1.0
+Exec=lv_gui
+Icon=/usr/share/locale-verifier/dict.png
+Type=Application
+Terminal=false
+StartupNotify=true
+Encoding=UTF-8
+Categories=Utility;
+<</MENU>>
+<<BUILD>>
+1
+1
+1
+strip
+<</BUILD>>
